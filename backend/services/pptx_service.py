@@ -79,55 +79,77 @@ async def _convert_libreoffice(
     lo_bin: str,
     log_cb: Callable[[str], Awaitable[None]],
 ) -> list[Path]:
+    """
+    Convert PPTX → PNG via two-step pipeline:
+      1. LibreOffice: PPTX → PDF  (preserves all slides faithfully)
+      2. PyMuPDF:    PDF  → PNG per page (fast, no extra dependencies)
+
+    LibreOffice --convert-to png only outputs slide 1 on Windows;
+    converting to PDF first then rendering with fitz gives all pages.
+    """
     await log_cb(f"[PPTX] Converting with LibreOffice: {pptx_path.name}")
 
-    # Each job needs its own LO user profile to avoid concurrent-job conflicts
-    # and to fix Windows single-slide-only conversion bug
-    lo_profile_dir = output_dir.parent / "lo_profile"
-    lo_profile_dir.mkdir(parents=True, exist_ok=True)
-    lo_profile_url = lo_profile_dir.as_uri()  # file:///path/to/lo_profile
-
+    # Step 1: PPTX → PDF
+    pdf_path = output_dir / (pptx_path.stem + ".pdf")
     cmd = [
         lo_bin,
-        f"-env:UserInstallation={lo_profile_url}",
         "--headless",
         "--norestore",
         "--nofirststartwizard",
         "--nologo",
         "--nolockcheck",
-        "--convert-to", "png",
+        "--convert-to", "pdf",
         "--outdir", str(output_dir),
         str(pptx_path),
     ]
 
-    # Use blocking subprocess.run in thread pool — avoids asyncio ProactorEventLoop
-    # requirement on Windows (which breaks with uvicorn --reload).
     loop = asyncio.get_event_loop()
     returncode, stderr_text = await loop.run_in_executor(
         None, _run_libreoffice_blocking, cmd
     )
 
     if returncode != 0:
-        raise RuntimeError(
-            f"LibreOffice failed: {stderr_text[-600:]}"
-        )
+        raise RuntimeError(f"LibreOffice PDF conversion failed: {stderr_text[-600:]}")
 
-    raw = sorted(
-        output_dir.glob("*.png"),
-        key=lambda p: _lo_sort_key(p.stem),
+    if not pdf_path.exists():
+        raise RuntimeError(f"LibreOffice produced no PDF: {pdf_path}")
+
+    # Step 2: PDF → PNG per page via PyMuPDF
+    await log_cb("[PPTX] Rendering slides from PDF...")
+    loop = asyncio.get_event_loop()
+    renamed = await loop.run_in_executor(
+        None, _pdf_to_pngs, pdf_path, output_dir, log_cb
     )
-    if not raw:
-        raise RuntimeError("LibreOffice produced no PNG files")
 
-    renamed = []
-    for i, src in enumerate(raw, start=1):
-        dst = output_dir / f"slide_{i:03d}.png"
-        src.rename(dst)
-        renamed.append(dst)
-        await log_cb(f"[PPTX] Converted {i}/{len(raw)} slides to PNG")
+    # Clean up intermediate PDF
+    pdf_path.unlink(missing_ok=True)
+
+    if not renamed:
+        raise RuntimeError("PyMuPDF produced no PNG files from PDF")
+
+    for i, p in enumerate(renamed, start=1):
+        await log_cb(f"[PPTX] Converted {i}/{len(renamed)} slides to PNG")
 
     await log_cb(f"[PPTX] Done — {len(renamed)} slides exported")
     return renamed
+
+
+def _pdf_to_pngs(pdf_path: Path, output_dir: Path, log_cb) -> list[Path]:
+    """Render each PDF page to a 1280×720-ish PNG using PyMuPDF (fitz)."""
+    import fitz  # PyMuPDF
+
+    paths: list[Path] = []
+    doc = fitz.open(str(pdf_path))
+    try:
+        for i, page in enumerate(doc):
+            # 144 DPI gives ~1280×720 for a standard 10×5.6 inch slide
+            pix = page.get_pixmap(dpi=144)
+            out_path = output_dir / f"slide_{i + 1:03d}.png"
+            pix.save(str(out_path))
+            paths.append(out_path)
+    finally:
+        doc.close()
+    return paths
 
 
 def _run_libreoffice_blocking(cmd: list[str]) -> tuple[int, str]:

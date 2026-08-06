@@ -1,7 +1,6 @@
 import asyncio
 import logging
 import subprocess
-import tempfile
 from pathlib import Path
 from typing import Optional
 
@@ -28,38 +27,49 @@ KOKORO_VOICE_MAP: dict[str, str] = {
     "anh_tho": "Anh Thơ",
 }
 
-# Singleton reference – loaded once during startup
-_kokoro_instance: Optional[object] = None
+# Cache: voice_id → KokoroVietnamese instance
+# Each instance is bound to one voice at init time.
+_kokoro_cache: dict[str, object] = {}
 _kokoro_lock = asyncio.Lock()
 
 
 class KokoroEngine(TTSEngine):
     """
     TTS engine backed by Kokoro-Vietnamese (ONNX Runtime, CPU inference).
-    Model is ~300 MB and is pre-loaded once during FastAPI lifespan startup.
-    Fallback: if generation fails, delegates to EdgeTTSEngine automatically.
+
+    API: KokoroVietnamese(voice=<id>, device="cpu")
+         instance.synthesize(text) → (np.ndarray, sample_rate: str)
+
+    One instance is created per voice and cached for reuse.
+    Fallback to Edge TTS on any error.
     """
 
     async def preload(self) -> None:
-        """Download and cache the Kokoro model into memory."""
-        global _kokoro_instance
-        async with _kokoro_lock:
-            if _kokoro_instance is not None:
-                return
-            logger.info("[TTS/Kokoro] Loading model (this may take a minute)...")
-            loop = asyncio.get_event_loop()
-            _kokoro_instance = await loop.run_in_executor(None, self._load_model)
-            logger.info("[TTS/Kokoro] Model ready.")
+        """Pre-warm the default voice (diem_trinh) at startup."""
+        await self._get_instance("diem_trinh")
+        logger.info("[TTS/Kokoro] Default voice pre-loaded.")
 
-    def _load_model(self) -> object:
-        """Blocking model load – runs in thread pool executor."""
+    async def _get_instance(self, voice_id: str) -> object:
+        """Get or create a cached KokoroVietnamese instance for this voice."""
+        async with _kokoro_lock:
+            if voice_id not in _kokoro_cache:
+                logger.info(f"[TTS/Kokoro] Loading model for voice '{voice_id}'...")
+                loop = asyncio.get_event_loop()
+                instance = await loop.run_in_executor(
+                    None, self._load_model, voice_id
+                )
+                _kokoro_cache[voice_id] = instance
+                logger.info(f"[TTS/Kokoro] Model ready for voice '{voice_id}'.")
+            return _kokoro_cache[voice_id]
+
+    def _load_model(self, voice_id: str) -> object:
+        """Blocking model load — runs in thread pool executor."""
         from kokoro_vietnamese import KokoroVietnamese  # type: ignore
-        # Load with the default/first voice; voices are switched per-request
-        instance = KokoroVietnamese(device="cpu")
-        # Warm up with a short Vietnamese phrase to JIT-compile ONNX graph
+        instance = KokoroVietnamese(voice=voice_id, device="cpu")
+        # Warm-up synthesis
         try:
-            instance.generate("xin chào", voice="diem_trinh")
-            logger.info("[TTS/Kokoro] Warm-up complete.")
+            instance.synthesize("xin chào")
+            logger.info(f"[TTS/Kokoro] Warm-up complete for '{voice_id}'.")
         except Exception as e:
             logger.warning(f"[TTS/Kokoro] Warm-up failed (non-fatal): {e}")
         return instance
@@ -70,10 +80,6 @@ class KokoroEngine(TTSEngine):
         settings: TTSSettings,
         output_path: Path,
     ) -> Path:
-        """
-        Generate audio with Kokoro-Vietnamese, write as MP3.
-        Falls back to Edge TTS on any error.
-        """
         voice_id = settings.kokoro_voice
         if voice_id not in KOKORO_VOICE_MAP:
             logger.warning(
@@ -98,30 +104,18 @@ class KokoroEngine(TTSEngine):
         self, text: str, voice_id: str, output_path: Path
     ) -> None:
         """Run Kokoro inference in thread pool, then convert WAV→MP3 via FFmpeg."""
-        global _kokoro_instance
-
-        # Ensure model is loaded
-        if _kokoro_instance is None:
-            await self.preload()
+        instance = await self._get_instance(voice_id)
 
         output_path.parent.mkdir(parents=True, exist_ok=True)
-
-        # Synthesize WAV in thread pool (ONNX is blocking / CPU-bound)
-        loop = asyncio.get_event_loop()
         wav_path = output_path.with_suffix(".wav")
 
+        loop = asyncio.get_event_loop()
         await loop.run_in_executor(
-            None,
-            self._synthesize_blocking,
-            text,
-            voice_id,
-            wav_path,
+            None, self._synthesize_blocking, instance, text, wav_path
         )
 
-        # Convert WAV → MP3
         await self._wav_to_mp3(wav_path, output_path)
 
-        # Clean up intermediate WAV
         if wav_path.exists():
             wav_path.unlink(missing_ok=True)
 
@@ -133,16 +127,22 @@ class KokoroEngine(TTSEngine):
             f"({output_path.stat().st_size // 1024} KB)"
         )
 
-    def _synthesize_blocking(self, text: str, voice_id: str, wav_path: Path) -> None:
-        """Blocking Kokoro synthesis – must run in executor."""
+    def _synthesize_blocking(self, instance: object, text: str, wav_path: Path) -> None:
+        """Blocking Kokoro synthesis — must run in executor."""
         import soundfile as sf  # type: ignore
+        import numpy as np
 
-        samples, sample_rate = _kokoro_instance.generate(text, voice=voice_id)  # type: ignore
+        # synthesize() returns (samples: np.ndarray, sample_rate: str|int)
+        samples, sample_rate = instance.synthesize(text)  # type: ignore
+
+        # sample_rate may come back as a string like "24000"
+        if isinstance(sample_rate, str):
+            sample_rate = int(sample_rate)
+
         sf.write(str(wav_path), samples, sample_rate)
 
     async def _wav_to_mp3(self, wav_path: Path, mp3_path: Path) -> None:
-        """Convert WAV to MP3 using FFmpeg subprocess (blocking in thread pool)."""
-        import subprocess
+        """Convert WAV to MP3 using FFmpeg (blocking in thread pool)."""
         cmd = [
             "ffmpeg", "-y",
             "-i", str(wav_path),
@@ -153,7 +153,12 @@ class KokoroEngine(TTSEngine):
         loop = asyncio.get_event_loop()
         result = await loop.run_in_executor(
             None,
-            lambda: subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=60)
+            lambda: subprocess.run(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=60,
+            )
         )
         if result.returncode != 0:
             raise RuntimeError(
@@ -163,10 +168,7 @@ class KokoroEngine(TTSEngine):
     async def _fallback_edge(
         self, text: str, settings: TTSSettings, output_path: Path
     ) -> None:
-        """Emergency fallback: use Edge TTS instead of Kokoro."""
         from tts.edge_engine import EdgeTTSEngine
-
-        # Force edge_tts engine in settings for fallback
         fallback_settings = TTSSettings(
             engine="edge_tts",
             voice=settings.voice or "vi-VN-HoaiMyNeural",

@@ -54,8 +54,7 @@ async def lifespan(app: FastAPI):
 
     await asyncio.gather(
         check_edge_tts(),
-        # Kokoro disabled on free tier (512MB RAM limit) — falls back to Edge TTS
-        # preload_kokoro(),
+        preload_kokoro(),
         return_exceptions=True
     )
 
@@ -77,19 +76,18 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# CORS — allow Vercel domain and local dev
+# CORS — allow local dev only
 ALLOWED_ORIGINS = [
-    "https://ppt2video.vercel.app",
-    "https://*.vercel.app",
     "http://localhost:3000",
     "http://localhost:3001",
-    os.getenv("FRONTEND_URL", ""),
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:3001",
+    os.getenv("FRONTEND_URL", "http://localhost:3000"),
 ]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[o for o in ALLOWED_ORIGINS if o],
-    allow_origin_regex=r"https://.*\.vercel\.app",
+    allow_origins=list(set(o for o in ALLOWED_ORIGINS if o)),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

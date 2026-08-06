@@ -1,0 +1,42 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: ppt2video-backend
+    ports:
+      - "8000:8000"
+    environment:
+      FRONTEND_URL: http://localhost:3000
+      MAX_CONCURRENT_JOBS: "2"
+      JOB_TIMEOUT_MINUTES: "30"
+      PYTHON_ENV: development
+    volumes:
+      # Persist Kokoro model cache across rebuilds
+      - kokoro-cache:/root/.cache
+      # Temp job files (optional: map to host for debugging)
+      - ./tmp:/tmp/jobs
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 90s
+      retries: 5
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: ppt2video-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_BACKEND_URL: http://backend:8000
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  kokoro-cache:

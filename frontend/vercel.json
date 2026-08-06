@@ -1,8 +1,0 @@
-{
-  "rewrites": [
-    {
-      "source": "/api/backend/:path*",
-      "destination": "https://ppt2video-backend.onrender.com/:path*"
-    }
-  ]
-}

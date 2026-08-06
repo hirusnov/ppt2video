@@ -8,6 +8,7 @@ Priority chain:
 """
 import asyncio
 import io
+import os
 import logging
 import re
 import shutil
@@ -58,12 +59,16 @@ def _log_sync(msg: str) -> None:
 
 def _find_libreoffice() -> str | None:
     for c in [
+        # Windows
+        r"C:\Program Files\LibreOffice\program\soffice.exe",
+        r"C:\Program Files (x86)\LibreOffice\program\soffice.exe",
+        # Linux / Docker
         "libreoffice", "soffice",
         "/usr/bin/libreoffice", "/usr/bin/soffice",
         "/usr/lib/libreoffice/program/soffice",
         "/opt/libreoffice/program/soffice",
     ]:
-        if shutil.which(c):
+        if shutil.which(c) or (os.path.isfile(c) if os.path.isabs(c) else False):
             return c
     return None
 

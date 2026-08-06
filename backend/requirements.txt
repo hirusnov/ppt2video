@@ -8,4 +8,4 @@ soundfile>=0.12.1
 pillow>=10.0
 sse-starlette==2.1.0
 aiofiles==23.2.1
-# kokoro-vietnamese[onnx]==0.1.0  # uncomment for production (large download)
+kokoro-vietnamese[onnx]==0.1.0

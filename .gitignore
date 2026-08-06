@@ -20,6 +20,7 @@ build/
 # Tmp / jobs
 /tmp/
 backend/tmp/
+tmp/
 
 # IDE
 .vscode/
@@ -34,3 +35,6 @@ Thumbs.db
 .env
 .env.*
 !.env.example
+
+.vercel
+.env*

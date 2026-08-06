@@ -1,9 +1,14 @@
 import os
+import sys
 import asyncio
 import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
+# Windows requires ProactorEventLoop for subprocess support
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
 from routers import validate, process, extract
 

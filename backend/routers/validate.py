@@ -1,10 +1,13 @@
 import re
+import io
 import logging
+import tempfile
 from pathlib import Path
 from fastapi import APIRouter, File, UploadFile, HTTPException
+from fastapi.responses import FileResponse
+from starlette.background import BackgroundTask
 from pydantic import BaseModel
 from typing import List
-import io
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -136,11 +139,6 @@ async def validate_files(
     )
 
 
-import tempfile
-from fastapi.responses import FileResponse
-from starlette.background import BackgroundTask
-
-
 PREVIEW_TEXT = "Xin chào, tôi là giọng đọc tiếng Việt của hệ thống PPT2VIDEO."
 
 
@@ -175,6 +173,5 @@ async def preview_voice(voice: str = "diem_trinh"):
         path=str(out_path),
         media_type="audio/mpeg",
         filename=f"preview_{voice}.mp3",
-        headers={"X-Voice-Label": voice_label},
         background=BackgroundTask(out_path.unlink, missing_ok=True),
     )

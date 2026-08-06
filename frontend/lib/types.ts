@@ -7,19 +7,19 @@ export interface KokoroVoice {
 
 export const KOKORO_VOICES: KokoroVoice[] = [
   { id: "diem_trinh", label: "Diễm Trinh" },
+  { id: "hung_thinh", label: "Hưng Thịnh" },
   { id: "mai_linh", label: "Mai Linh" },
+  { id: "mai_loan", label: "Mai Loan" },
+  { id: "manh_dung", label: "Mạnh Dũng" },
+  { id: "my_yen", label: "Mỹ Yến" },
+  { id: "ngoc_huyen", label: "Ngọc Huyền" },
+  { id: "phat_tai", label: "Phát Tài" },
+  { id: "thanh_dat", label: "Thành Đạt" },
+  { id: "thuc_trinh", label: "Thục Trinh" },
   { id: "tuan_ngoc", label: "Tuấn Ngọc" },
-  { id: "thu_ha", label: "Thu Hà" },
-  { id: "bao_chau", label: "Bảo Châu" },
-  { id: "minh_quan", label: "Minh Quân" },
-  { id: "hong_nhung", label: "Hồng Nhung" },
-  { id: "duc_tuan", label: "Đức Tuấn" },
-  { id: "my_tam", label: "Mỹ Tâm" },
-  { id: "quang_dung", label: "Quang Dũng" },
-  { id: "thanh_lam", label: "Thanh Lam" },
-  { id: "le_quyen", label: "Lệ Quyên" },
-  { id: "trong_tan", label: "Trọng Tấn" },
-  { id: "anh_tho", label: "Anh Thơ" },
+  { id: "storyvert", label: "Storyvert" },
+  { id: "duc_an", label: "Đức An" },
+  { id: "duc_duy", label: "Đức Duy" },
 ];
 
 // ─── TTS Settings ─────────────────────────────────────────────────────────────

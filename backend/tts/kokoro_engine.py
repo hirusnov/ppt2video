@@ -9,22 +9,22 @@ from tts.settings import TTSSettings
 
 logger = logging.getLogger(__name__)
 
-# All 14 Kokoro-Vietnamese voice IDs → display labels
+# Kokoro-Vietnamese voice IDs → display labels
 KOKORO_VOICE_MAP: dict[str, str] = {
     "diem_trinh": "Diễm Trinh",
+    "hung_thinh": "Hưng Thịnh",
     "mai_linh": "Mai Linh",
+    "mai_loan": "Mai Loan",
+    "manh_dung": "Mạnh Dũng",
+    "my_yen": "Mỹ Yến",
+    "ngoc_huyen": "Ngọc Huyền",
+    "phat_tai": "Phát Tài",
+    "thanh_dat": "Thành Đạt",
+    "thuc_trinh": "Thục Trinh",
     "tuan_ngoc": "Tuấn Ngọc",
-    "thu_ha": "Thu Hà",
-    "bao_chau": "Bảo Châu",
-    "minh_quan": "Minh Quân",
-    "hong_nhung": "Hồng Nhung",
-    "duc_tuan": "Đức Tuấn",
-    "my_tam": "Mỹ Tâm",
-    "quang_dung": "Quang Dũng",
-    "thanh_lam": "Thanh Lam",
-    "le_quyen": "Lệ Quyên",
-    "trong_tan": "Trọng Tấn",
-    "anh_tho": "Anh Thơ",
+    "storyvert": "Storyvert",
+    "duc_an": "Đức An",
+    "duc_duy": "Đức Duy",
 }
 
 # Cache: voice_id → KokoroVietnamese instance

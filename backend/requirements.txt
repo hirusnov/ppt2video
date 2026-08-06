@@ -1,0 +1,11 @@
+fastapi==0.111.0
+uvicorn[standard]==0.29.0
+python-multipart==0.0.9
+edge-tts>=7.0.0
+python-pptx==0.6.23
+ffmpeg-python==0.2.0
+soundfile>=0.12.1
+pillow>=10.0
+sse-starlette==2.1.0
+aiofiles==23.2.1
+# kokoro-vietnamese[onnx]==0.1.0  # uncomment for production (large download)

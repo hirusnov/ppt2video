@@ -1,0 +1,36 @@
+# Node
+node_modules/
+.next/
+frontend/.next/
+frontend/node_modules/
+frontend/.env.local
+*.tsbuildinfo
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+backend/.venv/
+*.egg-info/
+dist/
+build/
+
+# Tmp / jobs
+/tmp/
+backend/tmp/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets
+.env
+.env.*
+!.env.example

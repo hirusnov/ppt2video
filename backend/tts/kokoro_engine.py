@@ -141,7 +141,8 @@ class KokoroEngine(TTSEngine):
         sf.write(str(wav_path), samples, sample_rate)
 
     async def _wav_to_mp3(self, wav_path: Path, mp3_path: Path) -> None:
-        """Convert WAV to MP3 using FFmpeg subprocess."""
+        """Convert WAV to MP3 using FFmpeg subprocess (blocking in thread pool)."""
+        import subprocess
         cmd = [
             "ffmpeg", "-y",
             "-i", str(wav_path),
@@ -149,15 +150,14 @@ class KokoroEngine(TTSEngine):
             "-qscale:a", "2",
             str(mp3_path),
         ]
-        proc = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(
+            None,
+            lambda: subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=60)
         )
-        _, stderr = await proc.communicate()
-        if proc.returncode != 0:
+        if result.returncode != 0:
             raise RuntimeError(
-                f"FFmpeg WAV→MP3 failed: {stderr.decode(errors='replace')[-500:]}"
+                f"FFmpeg WAV→MP3 failed: {result.stderr.decode(errors='replace')[-500:]}"
             )
 
     async def _fallback_edge(

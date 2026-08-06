@@ -91,29 +91,17 @@ async def _convert_libreoffice(
         "--outdir", str(output_dir),
         str(pptx_path),
     ]
-    proc = await asyncio.create_subprocess_exec(
-        *cmd,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
-    try:
-        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=120)
-    except asyncio.TimeoutError:
-        proc.kill()
-        await proc.wait()
-        raise RuntimeError("LibreOffice timed out after 120s")
-    finally:
-        # Ensure process is fully reaped to free memory immediately
-        if proc.returncode is None:
-            try:
-                proc.kill()
-                await proc.wait()
-            except Exception:
-                pass
 
-    if proc.returncode != 0:
+    # Use blocking subprocess.run in thread pool — avoids asyncio ProactorEventLoop
+    # requirement on Windows (which breaks with uvicorn --reload).
+    loop = asyncio.get_event_loop()
+    returncode, stderr_text = await loop.run_in_executor(
+        None, _run_libreoffice_blocking, cmd
+    )
+
+    if returncode != 0:
         raise RuntimeError(
-            f"LibreOffice failed: {stderr.decode(errors='replace')[-600:]}"
+            f"LibreOffice failed: {stderr_text[-600:]}"
         )
 
     raw = sorted(
@@ -132,6 +120,21 @@ async def _convert_libreoffice(
 
     await log_cb(f"[PPTX] Done — {len(renamed)} slides exported")
     return renamed
+
+
+def _run_libreoffice_blocking(cmd: list[str]) -> tuple[int, str]:
+    """Run LibreOffice as a blocking subprocess — safe on all platforms."""
+    import subprocess
+    try:
+        result = subprocess.run(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=120,
+        )
+        return result.returncode, result.stderr.decode(errors="replace")
+    except subprocess.TimeoutExpired:
+        raise RuntimeError("LibreOffice timed out after 120s")
 
 
 def _lo_sort_key(stem: str) -> tuple[str, int]:

@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import subprocess
 from pathlib import Path
 from typing import Callable, Awaitable
 
@@ -9,21 +10,36 @@ SILENCE_PAD = 1.5   # seconds of silence after audio ends
 FADE_DUR = 0.4      # fade in/out duration in seconds
 
 
+# ─── Blocking subprocess helper ───────────────────────────────────────────────
+
+def _run(cmd: list[str], timeout: int = 180) -> tuple[int, str, str]:
+    """Run a subprocess synchronously. Returns (returncode, stdout, stderr)."""
+    result = subprocess.run(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        timeout=timeout,
+    )
+    return (
+        result.returncode,
+        result.stdout.decode(errors="replace"),
+        result.stderr.decode(errors="replace"),
+    )
+
+
+async def _run_async(cmd: list[str], timeout: int = 180) -> tuple[int, str, str]:
+    """Run _run() in thread pool so it doesn't block the event loop."""
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, _run, cmd, timeout)
+
+
+# ─── Public entry point ────────────────────────────────────────────────────────
+
 async def render_video(
     slides: list[dict],  # [{"png": Path, "mp3": Path, "index": int}]
     output_path: Path,
     log_cb: Callable[[str], Awaitable[None]] | None = None,
 ) -> Path:
-    """
-    Produce a final MP4 from a list of (PNG, MP3) pairs.
-
-    Pipeline per slide:
-      1. FFmpeg: loop PNG + MP3 → clip_{n}.mp4
-         - duration = audio_duration + SILENCE_PAD
-         - fade-out video at end, pad audio with silence
-    Final step:
-      2. FFmpeg concat demuxer → output.mp4 (H.264 + AAC)
-    """
     job_dir = output_path.parent
     clips_dir = job_dir / "clips"
     clips_dir.mkdir(parents=True, exist_ok=True)
@@ -73,43 +89,33 @@ async def render_video(
     return output_path
 
 
+# ─── Internal helpers ──────────────────────────────────────────────────────────
+
 async def _get_audio_duration(mp3: Path) -> float:
-    """Use ffprobe to get audio duration in seconds."""
     cmd = [
         "ffprobe", "-v", "error",
         "-show_entries", "format=duration",
         "-of", "default=noprint_wrappers=1:nokey=1",
         str(mp3),
     ]
-    proc = await asyncio.create_subprocess_exec(
-        *cmd,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
-    stdout, _ = await proc.communicate()
+    _, stdout, _ = await _run_async(cmd, timeout=30)
     try:
-        return float(stdout.decode().strip())
+        return float(stdout.strip())
     except ValueError:
         logger.warning(f"Could not parse duration for {mp3.name}, defaulting to 5.0s")
         return 5.0
 
 
 async def _get_video_duration(mp4: Path) -> float:
-    """Use ffprobe to get video duration in seconds."""
     cmd = [
         "ffprobe", "-v", "error",
         "-show_entries", "format=duration",
         "-of", "default=noprint_wrappers=1:nokey=1",
         str(mp4),
     ]
-    proc = await asyncio.create_subprocess_exec(
-        *cmd,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
-    stdout, _ = await proc.communicate()
+    _, stdout, _ = await _run_async(cmd, timeout=30)
     try:
-        return float(stdout.decode().strip())
+        return float(stdout.strip())
     except ValueError:
         return 0.0
 
@@ -121,25 +127,11 @@ async def _render_clip(
     clip_dur: float,
     fade_start: float,
 ) -> None:
-    """
-    Render a single slide clip:
-      - Loop the PNG image for clip_dur seconds
-      - Mix the MP3 audio, pad silence for the remaining time
-      - Apply fade-out video at end + fade-in at start
-      - Output H.264 video + AAC audio
-    """
-    fade_in_end = FADE_DUR
-
     cmd = [
         "ffmpeg", "-y",
-        # Image input — loop it
         "-loop", "1", "-framerate", "25",
         "-i", str(png),
-        # Audio input
         "-i", str(mp3),
-        # Filter complex:
-        # v: fade in at start (0→FADE_DUR), fade out at end
-        # a: pad silence to fill clip_dur
         "-filter_complex",
         (
             f"[0:v]scale=1280:720:force_original_aspect_ratio=decrease,"
@@ -159,17 +151,9 @@ async def _render_clip(
         "-pix_fmt", "yuv420p",
         str(clip_path),
     ]
-
-    proc = await asyncio.create_subprocess_exec(
-        *cmd,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
-    _, stderr = await asyncio.wait_for(proc.communicate(), timeout=180)
-
-    if proc.returncode != 0:
-        err = stderr.decode(errors="replace")[-800:]
-        raise RuntimeError(f"FFmpeg clip render failed:\n{err}")
+    rc, _, stderr = await _run_async(cmd, timeout=180)
+    if rc != 0:
+        raise RuntimeError(f"FFmpeg clip render failed:\n{stderr[-800:]}")
 
 
 async def _concat_clips(
@@ -177,14 +161,9 @@ async def _concat_clips(
     output_path: Path,
     job_dir: Path,
 ) -> None:
-    """
-    Concatenate all clips into a single MP4 using FFmpeg concat demuxer.
-    Uses forward-slash paths in the concat list (required by FFmpeg on all platforms).
-    """
     concat_list = job_dir / "concat.txt"
     with open(concat_list, "w", encoding="utf-8") as f:
         for clip in clip_paths:
-            # FFmpeg concat demuxer requires forward slashes even on Windows
             safe = clip.as_posix()
             f.write(f"file '{safe}'\n")
 
@@ -202,16 +181,8 @@ async def _concat_clips(
         "-pix_fmt", "yuv420p",
         str(output_path),
     ]
-
-    proc = await asyncio.create_subprocess_exec(
-        *cmd,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
-    _, stderr = await asyncio.wait_for(proc.communicate(), timeout=600)
-
-    if proc.returncode != 0:
-        err = stderr.decode(errors="replace")[-800:]
-        raise RuntimeError(f"FFmpeg concat failed:\n{err}")
+    rc, _, stderr = await _run_async(cmd, timeout=600)
+    if rc != 0:
+        raise RuntimeError(f"FFmpeg concat failed:\n{stderr[-800:]}")
 
     concat_list.unlink(missing_ok=True)

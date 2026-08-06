@@ -76,7 +76,12 @@ async def _convert_libreoffice(
 ) -> list[Path]:
     await log_cb(f"[PPTX] Converting with LibreOffice: {pptx_path.name}")
     cmd = [
-        lo_bin, "--headless", "--norestore",
+        lo_bin,
+        "--headless",
+        "--norestore",
+        "--nofirststartwizard",
+        "--nologo",
+        "--nolockcheck",
         "--convert-to", "png",
         "--outdir", str(output_dir),
         str(pptx_path),
@@ -86,7 +91,21 @@ async def _convert_libreoffice(
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )
-    stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=120)
+    try:
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=120)
+    except asyncio.TimeoutError:
+        proc.kill()
+        await proc.wait()
+        raise RuntimeError("LibreOffice timed out after 120s")
+    finally:
+        # Ensure process is fully reaped to free memory immediately
+        if proc.returncode is None:
+            try:
+                proc.kill()
+                await proc.wait()
+            except Exception:
+                pass
+
     if proc.returncode != 0:
         raise RuntimeError(
             f"LibreOffice failed: {stderr.decode(errors='replace')[-600:]}"

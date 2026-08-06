@@ -54,7 +54,8 @@ async def lifespan(app: FastAPI):
 
     await asyncio.gather(
         check_edge_tts(),
-        preload_kokoro(),
+        # Kokoro disabled on free tier (512MB RAM limit) — falls back to Edge TTS
+        # preload_kokoro(),
         return_exceptions=True
     )
 

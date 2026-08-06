@@ -2,7 +2,12 @@
 import React, { useState } from "react";
 import { ChevronDown, ChevronUp, SlidersHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { SlideData, TTSSettings, SlideSettings, EDGE_TTS_VOICES, KOKORO_VOICES } from "@/lib/types";
+import {
+  SlideData,
+  TTSSettings,
+  SlideSettings,
+  KOKORO_VOICES,
+} from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { VoiceSettings } from "@/components/VoiceSettings";
 
@@ -27,13 +32,12 @@ export function SlideCard({
     ? { ...globalSettings, ...slideOverride.settings }
     : globalSettings;
 
-  const engineLabel = effectiveSettings.engine === "kokoro" ? "Kokoro-VN" : "Edge TTS";
   const voiceLabel =
-    effectiveSettings.engine === "kokoro"
-      ? KOKORO_VOICES.find((v) => v.id === effectiveSettings.kokoroVoice)?.label ?? effectiveSettings.kokoroVoice
-      : EDGE_TTS_VOICES.find((v) => v.id === effectiveSettings.voice)?.label ?? effectiveSettings.voice;
+    KOKORO_VOICES.find((v) => v.id === effectiveSettings.kokoroVoice)?.label ??
+    effectiveSettings.kokoroVoice;
 
-  const truncated = slide.text.length > 120 ? slide.text.slice(0, 120) + "…" : slide.text;
+  const truncated =
+    slide.text.length > 120 ? slide.text.slice(0, 120) + "…" : slide.text;
   const needsExpand = slide.text.length > 120;
 
   const handleToggleOverride = () => {
@@ -61,7 +65,7 @@ export function SlideCard({
         "rounded-xl border transition-all duration-200",
         hasOverride
           ? "border-violet-500/30 bg-violet-500/5"
-          : "border-white/8 bg-zinc-900/50"
+          : "border-white/8 bg-zinc-900/50",
       )}
     >
       {/* Card header */}
@@ -72,7 +76,7 @@ export function SlideCard({
             "shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold",
             hasOverride
               ? "bg-violet-500/20 text-violet-300"
-              : "bg-zinc-800 text-zinc-400"
+              : "bg-zinc-800 text-zinc-400",
           )}
         >
           {slide.index}
@@ -81,14 +85,14 @@ export function SlideCard({
         {/* Text */}
         <div className="flex-1 min-w-0 space-y-1.5">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs text-zinc-500">{slide.charCount} ký tự</span>
+            <span className="text-xs text-zinc-500">
+              {slide.charCount} ký tự
+            </span>
             <span className="text-zinc-700">·</span>
-            <span className="text-xs text-zinc-500">{engineLabel}</span>
+            <span className="text-xs text-zinc-500">Kokoro-VN</span>
             <span className="text-zinc-700">·</span>
             <span className="text-xs text-zinc-500">{voiceLabel}</span>
-            {hasOverride && (
-              <Badge variant="custom">Custom</Badge>
-            )}
+            {hasOverride && <Badge variant="custom">Custom</Badge>}
           </div>
           <p className="text-sm text-zinc-300 leading-relaxed">
             {expanded ? slide.text : truncated}
@@ -100,9 +104,13 @@ export function SlideCard({
               className="text-xs text-violet-400 hover:text-violet-300 flex items-center gap-1"
             >
               {expanded ? (
-                <><ChevronUp className="w-3 h-3" /> Thu gọn</>
+                <>
+                  <ChevronUp className="w-3 h-3" /> Thu gọn
+                </>
               ) : (
-                <><ChevronDown className="w-3 h-3" /> Xem thêm</>
+                <>
+                  <ChevronDown className="w-3 h-3" /> Xem thêm
+                </>
               )}
             </button>
           )}
@@ -112,12 +120,14 @@ export function SlideCard({
         <button
           type="button"
           onClick={handleToggleOverride}
-          title={hasOverride ? "Bỏ custom settings" : "Custom settings cho slide này"}
+          title={
+            hasOverride ? "Bỏ custom settings" : "Custom settings cho slide này"
+          }
           className={cn(
             "shrink-0 p-2 rounded-lg border transition-all duration-200",
             hasOverride
               ? "border-violet-500/40 bg-violet-500/10 text-violet-400 hover:bg-violet-500/20"
-              : "border-white/10 bg-zinc-800 text-zinc-500 hover:text-zinc-300 hover:border-white/20"
+              : "border-white/10 bg-zinc-800 text-zinc-500 hover:text-zinc-300 hover:border-white/20",
           )}
         >
           <SlidersHorizontal className="w-4 h-4" />

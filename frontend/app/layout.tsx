@@ -8,7 +8,7 @@ const inter = Inter({ subsets: ["latin"] });
 export const metadata: Metadata = {
   title: "PPT2VIDEO — PPTX to MP4 with AI Vietnamese TTS",
   description:
-    "Convert PowerPoint presentations to MP4 videos with AI-powered Vietnamese text-to-speech using Edge TTS or Kokoro-Vietnamese.",
+    "Convert PowerPoint presentations to MP4 videos with AI-powered Vietnamese text-to-speech using Kokoro-Vietnamese.",
 };
 
 export default function RootLayout({
@@ -18,7 +18,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="vi" className="dark">
-      <body className={`${inter.className} min-h-screen bg-zinc-950 text-zinc-100`}>
+      <body
+        className={`${inter.className} min-h-screen bg-zinc-950 text-zinc-100`}
+      >
         {children}
         <Toaster
           theme="dark"

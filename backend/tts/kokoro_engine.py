@@ -66,7 +66,6 @@ class KokoroEngine(TTSEngine):
 
     Device is read from KOKORO_DEVICE env var (default: cpu).
     One instance is cached per voice_id to avoid reloading the model.
-    Fallback to Edge TTS on any error.
     """
 
     async def preload(self) -> None:
@@ -116,12 +115,7 @@ class KokoroEngine(TTSEngine):
         voice_label = KOKORO_VOICE_MAP[voice_id]
         logger.info(f"[TTS/Kokoro] Generating audio (voice: {voice_label})")
 
-        try:
-            await self._generate_kokoro(text, voice_id, output_path)
-        except Exception as e:
-            logger.warning(f"[TTS/Kokoro] Generation failed ({e}). Falling back to Edge TTS...")
-            await self._fallback_edge(text, settings, output_path)
-
+        await self._generate_kokoro(text, voice_id, output_path)
         return output_path
 
     async def _generate_kokoro(self, text: str, voice_id: str, output_path: Path) -> None:
@@ -180,14 +174,3 @@ class KokoroEngine(TTSEngine):
             raise RuntimeError(
                 f"FFmpeg WAV→MP3 failed: {result.stderr.decode(errors='replace')[-500:]}"
             )
-
-    async def _fallback_edge(self, text: str, settings: TTSSettings, output_path: Path) -> None:
-        from tts.edge_engine import EdgeTTSEngine
-        fallback_settings = TTSSettings(
-            engine="edge_tts",
-            voice=settings.voice or "vi-VN-HoaiMyNeural",
-            rate=0, pitch=0, volume=100,
-        )
-        edge = EdgeTTSEngine()
-        await edge.generate(text, fallback_settings, output_path)
-        logger.warning(f"[TTS/Kokoro] Fallback used Edge TTS → {output_path.name}")

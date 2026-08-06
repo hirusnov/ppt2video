@@ -1,16 +1,4 @@
-// ─── TTS Engine types ────────────────────────────────────────────────────────
-
-export type TTSEngine = "edge_tts" | "kokoro";
-
-export interface EdgeTTSVoice {
-  id: string;
-  label: string;
-}
-
-export const EDGE_TTS_VOICES: EdgeTTSVoice[] = [
-  { id: "vi-VN-HoaiMyNeural", label: "Hoài My (Nữ)" },
-  { id: "vi-VN-NamMinhNeural", label: "Nam Minh (Nam)" },
-];
+// ─── TTS types ────────────────────────────────────────────────────────────────
 
 export interface KokoroVoice {
   id: string;
@@ -37,22 +25,12 @@ export const KOKORO_VOICES: KokoroVoice[] = [
 // ─── TTS Settings ─────────────────────────────────────────────────────────────
 
 export interface TTSSettings {
-  engine: TTSEngine;
-  // Edge TTS
-  voice: string;
-  rate: number; // -50 to +50 (%)
-  pitch: number; // -20 to +20 (Hz)
-  volume: number; // 0 to 100
-  // Kokoro
+  engine: "kokoro";
   kokoroVoice: string;
 }
 
 export const DEFAULT_SETTINGS: TTSSettings = {
-  engine: "edge_tts",
-  voice: "vi-VN-HoaiMyNeural",
-  rate: 0,
-  pitch: 0,
-  volume: 100,
+  engine: "kokoro",
   kokoroVoice: "diem_trinh",
 };
 

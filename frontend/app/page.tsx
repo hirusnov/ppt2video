@@ -94,8 +94,8 @@ export default function HomePage() {
   // Health
   const [health, setHealth] = useState<{
     status: "checking" | "ok" | "error";
-    engines: string[];
-  }>({ status: "checking", engines: [] });
+    kokoro_ready: boolean;
+  }>({ status: "checking", kokoro_ready: false });
 
   useEffect(() => {
     fetch(backendUrl("/health"))
@@ -103,10 +103,10 @@ export default function HomePage() {
       .then((d) =>
         setHealth({
           status: d.status === "ok" ? "ok" : "error",
-          engines: d.engines ?? [],
+          kokoro_ready: d.kokoro_ready ?? false,
         }),
       )
-      .catch(() => setHealth({ status: "error", engines: [] }));
+      .catch(() => setHealth({ status: "error", kokoro_ready: false }));
   }, []);
 
   // ── Step 1 → Step 2: go to script editor ─────────────────────────────────
@@ -267,7 +267,7 @@ export default function HomePage() {
               {health.status === "checking"
                 ? "Connecting…"
                 : health.status === "ok"
-                  ? `Backend · ${health.engines.join(", ")}`
+                  ? `Backend · Kokoro${health.kokoro_ready ? " ✓" : " (loading)"}`
                   : "Backend offline"}
             </span>
           </div>
@@ -475,9 +475,7 @@ S3: Kết luận và cảm ơn.`}</pre>
       {/* ── Footer ── */}
       <footer className="border-t border-white/5 py-5">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-zinc-600">
-          <span>
-            PPT2VIDEO · Edge TTS + Kokoro-Vietnamese · FastAPI + Next.js 14
-          </span>
+          <span>PPT2VIDEO · Kokoro-Vietnamese · FastAPI + Next.js 14</span>
           <a
             href="https://github.com"
             className="flex items-center gap-1.5 hover:text-zinc-400 transition-colors"

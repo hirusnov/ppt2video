@@ -18,56 +18,34 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Global flag for engine availability
-engine_status = {
-    "edge_tts": False,
-    "kokoro": False,
-}
+kokoro_ready = False
 
 
 async def preload_kokoro():
     """Pre-warm Kokoro model at startup to reduce first-request latency."""
+    global kokoro_ready
     try:
         logger.info("[STARTUP] Pre-loading Kokoro-Vietnamese model...")
         from tts.kokoro_engine import KokoroEngine
         engine = KokoroEngine()
         await engine.preload()
-        engine_status["kokoro"] = True
+        kokoro_ready = True
         logger.info("[STARTUP] Kokoro model loaded successfully.")
     except Exception as e:
-        logger.warning(f"[STARTUP] Kokoro pre-load failed (will fallback to Edge TTS): {e}")
-        engine_status["kokoro"] = False
-
-
-async def check_edge_tts():
-    """Verify Edge TTS is reachable."""
-    try:
-        import edge_tts
-        engine_status["edge_tts"] = True
-        logger.info("[STARTUP] Edge TTS available.")
-    except Exception as e:
-        logger.warning(f"[STARTUP] Edge TTS check failed: {e}")
-        engine_status["edge_tts"] = False
+        logger.warning(f"[STARTUP] Kokoro pre-load failed: {e}")
+        kokoro_ready = False
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Application lifespan: startup tasks before yield, cleanup after."""
     logger.info("[STARTUP] PPT2VIDEO backend starting...")
     from services.job_store import JOBS_BASE
     JOBS_BASE.mkdir(parents=True, exist_ok=True)
 
-    await asyncio.gather(
-        check_edge_tts(),
-        preload_kokoro(),
-        return_exceptions=True
-    )
+    await preload_kokoro()
 
-    available = [k for k, v in engine_status.items() if v]
-    logger.info(f"[STARTUP] Available engines: {available}")
-
-    # Store engine status in app state
-    app.state.engine_status = engine_status
+    logger.info(f"[STARTUP] Kokoro ready: {kokoro_ready}")
+    app.state.kokoro_ready = kokoro_ready
 
     yield
 
@@ -76,7 +54,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="PPT2VIDEO API",
-    description="Convert PPTX + Vietnamese script to MP4 with AI TTS",
+    description="Convert PPTX + Vietnamese script to MP4 with Kokoro TTS",
     version="1.0.0",
     lifespan=lifespan
 )
@@ -98,7 +76,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include routers
 app.include_router(validate.router, prefix="/api")
 app.include_router(process.router, prefix="/api")
 app.include_router(extract.router, prefix="/api")
@@ -106,16 +83,9 @@ app.include_router(extract.router, prefix="/api")
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint — returns available TTS engines."""
-    status = getattr(app.state, "engine_status", engine_status)
-    available_engines = [k for k, v in status.items() if v]
-
-    # Always report edge_tts as available (it works without pre-load)
-    if "edge_tts" not in available_engines:
-        available_engines.append("edge_tts")
-
     return {
         "status": "ok",
-        "engines": available_engines,
+        "engine": "kokoro",
+        "kokoro_ready": getattr(app.state, "kokoro_ready", False),
         "version": "1.0.0"
     }

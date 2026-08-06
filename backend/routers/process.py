@@ -26,8 +26,6 @@ from services.job_store import (
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
-
-# ─── Progress thresholds ─────────────────────────────────────────────────────
 PROG_VALIDATE    = 5
 PROG_PPTX_START  = 5
 PROG_PPTX_DONE   = 20
@@ -201,7 +199,23 @@ async def _pipeline_inner(
             await emit("pptx_convert", msg, PROG_PPTX_START)
 
     png_paths = await convert_to_images(pptx_path, png_dir, log_cb=pptx_log)
-    png_paths = png_paths[:n_slides]  # trim to matching count
+
+    # Recalculate n_slides based on actual PNG output — LibreOffice may produce
+    # fewer slides than expected (e.g. hidden slides, conversion quirks)
+    actual_slides = min(len(png_paths), len(parsed_slides))
+    if actual_slides == 0:
+        raise ValueError(
+            f"No PNG slides produced. "
+            f"LibreOffice returned {len(png_paths)} PNG(s), "
+            f"script has {len(parsed_slides)} slide(s)."
+        )
+    if actual_slides < n_slides:
+        logger.warning(
+            f"[JOB] PNG count ({len(png_paths)}) < expected n_slides ({n_slides}). "
+            f"Trimming to {actual_slides}."
+        )
+    n_slides = actual_slides
+    png_paths = png_paths[:n_slides]
 
     # ── Step 3: TTS (parallel) ──────────────────────────────────────────────
     global_settings = TTSSettings.from_dict(settings_dict)

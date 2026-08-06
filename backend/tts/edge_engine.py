@@ -6,18 +6,18 @@ from tts.settings import TTSSettings
 
 logger = logging.getLogger(__name__)
 
+# Known Vietnamese voices — used only for display labels, not as a filter
+EDGE_VOICE_LABELS: dict[str, str] = {
+    "vi-VN-HoaiMyNeural": "Hoài My (Nữ)",
+    "vi-VN-NamMinhNeural": "Nam Minh (Nam)",
+}
+
 
 class EdgeTTSEngine(TTSEngine):
     """
     TTS engine backed by Microsoft Edge TTS (edge-tts library).
-    Supports Vietnamese voices: vi-VN-HoaiMyNeural and vi-VN-NamMinhNeural.
-    Supports rate, pitch, and volume adjustments via SSML parameters.
+    Supports any voice string — passes it directly to edge_tts.Communicate.
     """
-
-    SUPPORTED_VOICES = {
-        "vi-VN-HoaiMyNeural": "Hoài My (Nữ)",
-        "vi-VN-NamMinhNeural": "Nam Minh (Nam)",
-    }
 
     async def generate(
         self,
@@ -26,24 +26,18 @@ class EdgeTTSEngine(TTSEngine):
         output_path: Path,
     ) -> Path:
         """Generate MP3 audio using Edge TTS."""
-        voice = settings.voice
-        if voice not in self.SUPPORTED_VOICES:
-            logger.warning(
-                f"[TTS/Edge] Voice '{voice}' not in supported list, falling back to HoaiMy"
-            )
-            voice = "vi-VN-HoaiMyNeural"
+        voice = settings.voice or "vi-VN-HoaiMyNeural"
 
         rate_str = settings.edge_rate_str()
         pitch_str = settings.edge_pitch_str()
         volume_str = settings.edge_volume_str()
 
-        voice_label = self.SUPPORTED_VOICES.get(voice, voice)
+        voice_label = EDGE_VOICE_LABELS.get(voice, voice)
         logger.info(
             f"[TTS/Edge] Generating audio "
             f"(voice: {voice_label}, rate: {rate_str}, pitch: {pitch_str})"
         )
 
-        # Ensure output directory exists
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
         communicate = edge_tts.Communicate(

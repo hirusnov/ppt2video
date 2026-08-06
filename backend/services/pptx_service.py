@@ -80,8 +80,16 @@ async def _convert_libreoffice(
     log_cb: Callable[[str], Awaitable[None]],
 ) -> list[Path]:
     await log_cb(f"[PPTX] Converting with LibreOffice: {pptx_path.name}")
+
+    # Each job needs its own LO user profile to avoid concurrent-job conflicts
+    # and to fix Windows single-slide-only conversion bug
+    lo_profile_dir = output_dir.parent / "lo_profile"
+    lo_profile_dir.mkdir(parents=True, exist_ok=True)
+    lo_profile_url = lo_profile_dir.as_uri()  # file:///path/to/lo_profile
+
     cmd = [
         lo_bin,
+        f"-env:UserInstallation={lo_profile_url}",
         "--headless",
         "--norestore",
         "--nofirststartwizard",
@@ -135,7 +143,6 @@ def _run_libreoffice_blocking(cmd: list[str]) -> tuple[int, str]:
         return result.returncode, result.stderr.decode(errors="replace")
     except subprocess.TimeoutExpired:
         raise RuntimeError("LibreOffice timed out after 120s")
-
 
 def _lo_sort_key(stem: str) -> tuple[str, int]:
     m = re.match(r"^(.*?)(\d+)$", stem)

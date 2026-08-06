@@ -1,5 +1,6 @@
 import re
 import logging
+from pathlib import Path
 from fastapi import APIRouter, File, UploadFile, HTTPException
 from pydantic import BaseModel
 from typing import List
@@ -132,4 +133,48 @@ async def validate_files(
         slides=slides,
         totalSlides=pptx_slide_count,
         warnings=warnings
+    )
+
+
+import tempfile
+from fastapi.responses import FileResponse
+from starlette.background import BackgroundTask
+
+
+PREVIEW_TEXT = "Xin chào, tôi là giọng đọc tiếng Việt của hệ thống PPT2VIDEO."
+
+
+@router.get("/preview-voice")
+async def preview_voice(voice: str = "diem_trinh"):
+    """
+    Generate a short MP3 preview for the given Kokoro voice ID.
+    Returns the MP3 file directly (streamed).
+    """
+    from tts.kokoro_engine import KokoroEngine, KOKORO_VOICE_MAP
+    from tts.settings import TTSSettings
+
+    if voice not in KOKORO_VOICE_MAP:
+        raise HTTPException(status_code=400, detail=f"Unknown voice: {voice}")
+
+    engine = KokoroEngine()
+    settings = TTSSettings(engine="kokoro", kokoro_voice=voice)
+
+    # Write to a temp file — FileResponse will stream it then we clean up
+    tmp = tempfile.NamedTemporaryFile(suffix=".mp3", delete=False)
+    tmp.close()
+    out_path = Path(tmp.name)
+
+    try:
+        await engine.generate(PREVIEW_TEXT, settings, out_path)
+    except Exception as e:
+        out_path.unlink(missing_ok=True)
+        raise HTTPException(status_code=500, detail=f"Preview generation failed: {e}")
+
+    voice_label = KOKORO_VOICE_MAP[voice]
+    return FileResponse(
+        path=str(out_path),
+        media_type="audio/mpeg",
+        filename=f"preview_{voice}.mp3",
+        headers={"X-Voice-Label": voice_label},
+        background=BackgroundTask(out_path.unlink, missing_ok=True),
     )

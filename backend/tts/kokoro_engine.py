@@ -128,18 +128,17 @@ class KokoroEngine(TTSEngine):
         )
 
     def _synthesize_blocking(self, instance: object, text: str, wav_path: Path) -> None:
-        """Blocking Kokoro synthesis — must run in executor."""
+        """Blocking Kokoro synthesis — must run in executor.
+        
+        synthesize() returns (audio: np.ndarray, phonemes: str).
+        Sample rate is a module-level constant SAMPLE_RATE = 24000.
+        """
         import soundfile as sf  # type: ignore
-        import numpy as np
+        from kokoro_vietnamese import SAMPLE_RATE
 
-        # synthesize() returns (samples: np.ndarray, sample_rate: str|int)
-        samples, sample_rate = instance.synthesize(text)  # type: ignore
-
-        # sample_rate may come back as a string like "24000"
-        if isinstance(sample_rate, str):
-            sample_rate = int(sample_rate)
-
-        sf.write(str(wav_path), samples, sample_rate)
+        # result = (audio_array, phoneme_string) — NOT (audio, sample_rate)
+        audio, _phonemes = instance.synthesize(text)  # type: ignore
+        sf.write(str(wav_path), audio, SAMPLE_RATE)
 
     async def _wav_to_mp3(self, wav_path: Path, mp3_path: Path) -> None:
         """Convert WAV to MP3 using FFmpeg (blocking in thread pool)."""

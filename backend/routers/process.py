@@ -22,6 +22,7 @@ from sse_starlette.sse import EventSourceResponse
 from services.job_store import (
     Job, _semaphore, cleanup_expired_jobs,
     create_job, get_job, remove_job, _cleanup_job_dir, job_dir_for,
+    JOBS_BASE,
 )
 
 logger = logging.getLogger(__name__)
@@ -375,8 +376,29 @@ async def get_status(job_id: str):
 async def download_video(job_id: str, background_tasks: BackgroundTasks):
     """Stream MP4 to client, then cleanup job temp directory."""
     job = get_job(job_id)
+
+    # Job not in memory (e.g. backend restarted) — try to find file on disk
     if not job:
+        disk_path = JOBS_BASE / job_id / "output.mp4"
+        if disk_path.exists():
+            logger.info(f"[JOB] Job {job_id} not in memory, serving from disk")
+            async def disk_streamer():
+                async with aiofiles.open(disk_path, "rb") as f:
+                    while chunk := await f.read(1024 * 256):
+                        yield chunk
+            background_tasks.add_task(_do_cleanup_path, job_id, disk_path.parent)
+            file_size = disk_path.stat().st_size
+            return StreamingResponse(
+                disk_streamer(),
+                media_type="video/mp4",
+                headers={
+                    "Content-Disposition": f'attachment; filename="ppt2video_{job_id[:8]}.mp4"',
+                    "Content-Length": str(file_size),
+                    "X-Job-Id": job_id,
+                },
+            )
         raise HTTPException(404, f"Job {job_id} not found")
+
     if job.status != "done" or not job.output_path:
         raise HTTPException(400, f"Job {job_id} not ready (status: {job.status})")
     if not job.output_path.exists():
@@ -409,3 +431,9 @@ async def _do_cleanup(job_id: str, job_dir: Path) -> None:
     remove_job(job_id)
     _cleanup_job_dir(job_dir)
     logger.info(f"[JOB] Cleaned up job {job_id}")
+
+
+async def _do_cleanup_path(job_id: str, job_dir: Path) -> None:
+    """Cleanup for jobs found on disk (not in memory store)."""
+    _cleanup_job_dir(job_dir)
+    logger.info(f"[JOB] Cleaned up disk job {job_id}")

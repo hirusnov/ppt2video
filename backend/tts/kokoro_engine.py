@@ -156,16 +156,24 @@ class KokoroEngine(TTSEngine):
         import soundfile as sf  # type: ignore
         from kokoro_vietnamese import SAMPLE_RATE
 
+        # _split_text returns chunks interleaved with "\n\n" markers for paragraph breaks
         chunks = _split_text(text)
         audio_parts: list[np.ndarray] = []
+        dtype = np.float32
 
         for chunk in chunks:
+            # Paragraph break marker — insert 1 second silence
+            if chunk == "\n\n":
+                silence = np.zeros(int(SAMPLE_RATE * 1.0), dtype=dtype)
+                audio_parts.append(silence)
+                continue
             if not chunk.strip():
                 continue
             try:
                 audio, _ = instance.synthesize(chunk, speed=speed)  # type: ignore
+                dtype = audio.dtype
                 audio_parts.append(audio)
-                # Short silence between chunks (0.15s)
+                # Short silence between sentences (0.15s)
                 silence = np.zeros(int(SAMPLE_RATE * 0.15), dtype=audio.dtype)
                 audio_parts.append(silence)
             except ValueError as e:
@@ -178,6 +186,7 @@ class KokoroEngine(TTSEngine):
                         continue
                     try:
                         audio, _ = instance.synthesize(sub.strip(), speed=speed)  # type: ignore
+                        dtype = audio.dtype
                         audio_parts.append(audio)
                         silence = np.zeros(int(SAMPLE_RATE * 0.08), dtype=audio.dtype)
                         audio_parts.append(silence)
@@ -214,53 +223,70 @@ class KokoroEngine(TTSEngine):
                 f"FFmpeg WAV→MP3 failed: {result.stderr.decode(errors='replace')[-500:]}"
             )
 
+PARAGRAPH_BREAK = "\n\n"  # sentinel inserted between paragraphs
+
+
 def _split_text(text: str, max_chars: int = 300) -> list[str]:
     """
     Split text into chunks small enough for Kokoro (<=510 phonemes ≈ <=300 chars).
-    Splits on sentence boundaries: newline > .!? > semicolon/dash.
+    Splits on: paragraph break (blank line) > sentence .!? > semicolon/dash.
     Never splits on comma to preserve context like "phong, ban, nganh".
+
+    Returns chunks interleaved with PARAGRAPH_BREAK sentinels so the caller
+    can insert longer silence (1s) at paragraph boundaries.
     """
     import re
 
-    # First split on newlines and sentence-ending punctuation
-    raw = re.split(r"(?<=[.!?…])\s+|(?<=\n)", text)
+    # First split on paragraph breaks (blank lines) to preserve 1s pause markers
+    paragraphs = re.split(r"\n\s*\n", text)
 
-    chunks: list[str] = []
-    current = ""
+    result: list[str] = []
 
-    for part in raw:
-        part = part.strip()
-        if not part:
-            continue
-        if len(current) + len(part) + 1 <= max_chars:
-            current = (current + " " + part).strip() if current else part
-        else:
-            if current:
-                chunks.append(current)
-            # If single part still too long, split on em-dash / bullet / semicolon
-            if len(part) > max_chars:
-                sub_parts = re.split(r"[;\-–—]+", part)
-                sub_buf = ""
-                for sp in sub_parts:
-                    sp = sp.strip()
-                    if not sp:
-                        continue
-                    if len(sub_buf) + len(sp) + 2 <= max_chars:
-                        sub_buf = (sub_buf + "; " + sp).strip("; ") if sub_buf else sp
-                    else:
-                        if sub_buf:
-                            chunks.append(sub_buf)
-                        sub_buf = sp
-                if sub_buf:
-                    chunks.append(sub_buf)
-                current = ""
+    for para_idx, paragraph in enumerate(paragraphs):
+        if para_idx > 0:
+            result.append(PARAGRAPH_BREAK)  # 1s silence between paragraphs
+
+        # Within each paragraph, split on sentence-ending punctuation
+        raw = re.split(r"(?<=[.!?…])\s+|(?<=\n)", paragraph)
+
+        chunks: list[str] = []
+        current = ""
+
+        for part in raw:
+            part = part.strip()
+            if not part:
+                continue
+            if len(current) + len(part) + 1 <= max_chars:
+                current = (current + " " + part).strip() if current else part
             else:
-                current = part
+                if current:
+                    chunks.append(current)
+                # If single part still too long, split on em-dash / bullet / semicolon
+                if len(part) > max_chars:
+                    sub_parts = re.split(r"[;\-–—]+", part)
+                    sub_buf = ""
+                    for sp in sub_parts:
+                        sp = sp.strip()
+                        if not sp:
+                            continue
+                        if len(sub_buf) + len(sp) + 2 <= max_chars:
+                            sub_buf = (sub_buf + "; " + sp).strip("; ") if sub_buf else sp
+                        else:
+                            if sub_buf:
+                                chunks.append(sub_buf)
+                            sub_buf = sp
+                    if sub_buf:
+                        chunks.append(sub_buf)
+                    current = ""
+                else:
+                    current = part
 
-    if current:
-        chunks.append(current)
+        if current:
+            chunks.append(current)
 
-    return [c for c in chunks if c.strip()]
+        result.extend([c for c in chunks if c.strip()])
+
+    return result
 
 
 _DIGIT_VI = {"0": "không", "1": "một", "2": "hai", "3": "ba", "4": "bốn",

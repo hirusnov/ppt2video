@@ -64,6 +64,8 @@ export function ProcessPanel({
   const [logs, setLogs] = useState<LogLine[]>([]);
   const [confetti, setConfetti] = useState(false);
   const esRef = useRef<EventSource | null>(null);
+  // Guard against double-submit (React Strict Mode / re-mount)
+  const submittedRef = useRef(false);
   // Track status in a ref so onerror closure always reads the current value
   const statusRef = useRef<"submitting" | "streaming" | "done" | "error">(
     "submitting",
@@ -86,6 +88,10 @@ export function ProcessPanel({
   // Submit job then open SSE stream
   useEffect(() => {
     let cancelled = false;
+
+    // Prevent double-submit from React Strict Mode double-invoke
+    if (submittedRef.current) return;
+    submittedRef.current = true;
 
     async function submit() {
       // Build script .txt from scriptMap: "S1: text\n\nS2: text\n..."

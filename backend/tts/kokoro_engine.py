@@ -360,7 +360,16 @@ def _normalize_text(text: str) -> str:
     text = re.sub(r"\d{1,3}(?:\.\d{3})+", _replace, text)
     # 5. 4-digit years standalone — read digit by digit (2026 -> hai không hai sáu)
     text = re.sub(r"(?<!\d)((?:19|20)[0-9]{2})(?!\d)", lambda m: _year_digits(m.group(1)), text)
-    # 6. plain integers >=2 digits (standalone, not part of doc codes like 22/HD-BCA)
-    text = re.sub(r"(?<![/\w])\d{2,}(?![/\w])", _replace, text)
+    # 6. all remaining standalone integers (1+ digits)
+    # Exclude numbers that are part of doc codes (preceded/followed by / or letters)
+    # Use word boundary but allow leading zeros: "02" -> "hai", "5" -> "năm"
+    def _replace_int(m):
+        raw = m.group(0)
+        try:
+            return _replace(m)
+        except Exception:
+            return raw
+
+    text = re.sub(r"(?<![/\-\w])\d+(?![/\-\w])", _replace_int, text)
 
     return text

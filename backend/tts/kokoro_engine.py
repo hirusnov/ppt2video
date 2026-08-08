@@ -352,6 +352,17 @@ def _normalize_text(text: str) -> str:
         return f"{_n2v(d)} tháng {_n2v(mo)} năm {_year_digits(yr)}"
     # Only match bare date patterns (not preceded by letter/digit)
     text = re.sub(r"(?<![/\d\w])(\d{1,2})/(\d{1,2})/(\d{4})(?![/\d])", _replace_date, text)
+    # 1b. month/year: 12/2025 -> tháng mười hai năm hai không hai lăm
+    #     but "tháng 12/2025" -> "tháng mười hai năm hai không hai lăm" (no double tháng)
+    def _replace_month_year(m):
+        mo, yr = int(m.group(1)), m.group(2)
+        # Check if preceded by "tháng " — if so, omit the "tháng" prefix
+        start = m.start()
+        preceding = text[:start].rstrip()
+        if preceding.endswith("tháng") or preceding.endswith("thang"):
+            return f"{_n2v(mo)} năm {_year_digits(yr)}"
+        return f"tháng {_n2v(mo)} năm {_year_digits(yr)}"
+    text = re.sub(r"(?<![/\d])(\d{1,2})/((?:19|20)\d{2})(?!\d)", _replace_month_year, text)
     # 2. percentages
     text = re.sub(r"\d[\d.,]*%", _replace, text)
     # 3. decimals with comma

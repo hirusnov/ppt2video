@@ -9,6 +9,7 @@ pillow>=10.0
 sse-starlette==2.1.0
 aiofiles==23.2.1
 pymupdf>=1.24.0
+num2words>=0.5.13
 # GPU: install torch with CUDA support manually:
 #   pip install torch --index-url https://download.pytorch.org/whl/cu128
 onnxruntime-gpu>=1.18.0

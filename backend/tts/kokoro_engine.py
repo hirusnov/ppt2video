@@ -1,4 +1,4 @@
-import asyncio
+﻿import asyncio
 import logging
 import os
 import subprocess
@@ -124,8 +124,11 @@ class KokoroEngine(TTSEngine):
         output_path.parent.mkdir(parents=True, exist_ok=True)
         wav_path = output_path.with_suffix(".wav")
 
+        # Normalize numbers → Vietnamese spoken form before synthesis
+        normalized = _normalize_text(text)
+
         loop = asyncio.get_event_loop()
-        await loop.run_in_executor(None, self._synthesize_blocking, instance, text, wav_path)
+        await loop.run_in_executor(None, self._synthesize_blocking, instance, normalized, wav_path)
         await self._wav_to_mp3(wav_path, output_path)
 
         if wav_path.exists():
@@ -256,3 +259,97 @@ def _split_text(text: str, max_chars: int = 200) -> list[str]:
         chunks.append(current)
 
     return [c for c in chunks if c.strip()]
+
+
+def _normalize_text(text: str) -> str:
+    """
+    Convert numbers and common patterns to Vietnamese spoken form
+    so Kokoro can phonemize them correctly.
+
+    Handles:
+    - Dates: 1/7/2025 → ngày một tháng bảy năm hai nghìn...
+    - Percentages: 91% → chín mươi mốt phần trăm
+    - Decimals (comma): 15,09 → mười lăm phẩy không chín
+    - Thousands (dot separator): 148.285 → một trăm bốn mươi tám nghìn...
+    - Plain integers: 357 → ba trăm năm mươi bảy
+    - Ordinals like /KH-UBND stay as-is (not all-digit)
+    """
+    import re
+    try:
+        from num2words import num2words as n2w
+    except ImportError:
+        return text
+
+    def _n2v(n: int | float) -> str:
+        try:
+            return n2w(n, lang="vi")
+        except Exception:
+            return str(n)
+
+    def _replace(m: re.Match) -> str:
+        raw = m.group(0)
+
+        # Date: d/m/yyyy or dd/mm/yyyy
+        dm = re.fullmatch(r"(\d{1,2})/(\d{1,2})/(\d{4})", raw)
+        if dm:
+            d, mo, yr = int(dm.group(1)), int(dm.group(2)), int(dm.group(3))
+            return f"ngày {_n2v(d)} tháng {_n2v(mo)} năm {_n2v(yr)}"
+
+        # Percentage: 91%  (handled by calling site stripping %)
+        pct = re.fullmatch(r"(\d[\d.,]*)%", raw)
+        if pct:
+            num_str = pct.group(1).replace(".", "").replace(",", ".")
+            try:
+                val = float(num_str) if "." in num_str else int(num_str)
+                return _n2v(val) + " phần trăm"
+            except Exception:
+                return raw
+
+        # Decimal with comma Vietnamese-style: 15,09
+        dec = re.fullmatch(r"(\d+),(\d{1,3})", raw)
+        if dec:
+            try:
+                val = float(raw.replace(",", "."))
+                int_part = _n2v(int(dec.group(1)))
+                frac = dec.group(2)
+                frac_spoken = " ".join(_n2v(int(d)) for d in frac)
+                return f"{int_part} phẩy {frac_spoken}"
+            except Exception:
+                return raw
+
+        # Integer with dot thousands separator: 148.285 / 18.012
+        dot_int = re.fullmatch(r"\d{1,3}(?:\.\d{3})+", raw)
+        if dot_int:
+            try:
+                return _n2v(int(raw.replace(".", "")))
+            except Exception:
+                return raw
+
+        # Plain integer
+        if re.fullmatch(r"\d+", raw):
+            try:
+                return _n2v(int(raw))
+            except Exception:
+                return raw
+
+        return raw
+
+    # Order matters: try longer patterns first
+    # 1. dates (d/m/yyyy) — replace entire token including surrounding context
+    def _replace_date(m):
+        d, mo, yr = int(m.group(1)), int(m.group(2)), int(m.group(3))
+        return f"{_n2v(d)} tháng {_n2v(mo)} năm {_n2v(yr)}"
+    # Only match bare date patterns (not preceded by letter/digit)
+    text = re.sub(r"(?<![/\d\w])(\d{1,2})/(\d{1,2})/(\d{4})(?![/\d])", _replace_date, text)
+    # 2. percentages
+    text = re.sub(r"\d[\d.,]*%", _replace, text)
+    # 3. decimals with comma
+    text = re.sub(r"\d+,\d{1,3}(?!\d)", _replace, text)
+    # 4. thousands with dots (e.g. 148.285 — only if all groups are 3 digits)
+    text = re.sub(r"\d{1,3}(?:\.\d{3})+", _replace, text)
+    # 5. 4-digit years standalone — spell as number only (prefix "năm" stays)
+    text = re.sub(r"(?<!\d)(20[0-3]\d)(?!\d)", lambda m: _n2v(int(m.group(1))), text)
+    # 6. plain integers >=2 digits (standalone, not part of doc codes like 22/HD-BCA)
+    text = re.sub(r"(?<![/\w])\d{2,}(?![/\w])", _replace, text)
+
+    return text

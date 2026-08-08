@@ -135,15 +135,19 @@ async def _convert_libreoffice(
 
 
 def _pdf_to_pngs(pdf_path: Path, output_dir: Path, log_cb) -> list[Path]:
-    """Render each PDF page to a 1280×720-ish PNG using PyMuPDF (fitz)."""
+    """Render each PDF page to a high-res PNG using PyMuPDF (fitz).
+
+    216 DPI → ~1920×1080 for a standard 16:9 slide (10×5.625 inch).
+    Higher DPI = sharper text and images in the final video.
+    """
     import fitz  # PyMuPDF
 
     paths: list[Path] = []
     doc = fitz.open(str(pdf_path))
     try:
         for i, page in enumerate(doc):
-            # 144 DPI gives ~1280×720 for a standard 10×5.6 inch slide
-            pix = page.get_pixmap(dpi=144)
+            # 216 DPI → ~1920×1080 native, no upscaling needed by FFmpeg
+            pix = page.get_pixmap(dpi=216)
             out_path = output_dir / f"slide_{i + 1:03d}.png"
             pix.save(str(out_path))
             paths.append(out_path)

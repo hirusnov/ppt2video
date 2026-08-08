@@ -134,8 +134,8 @@ async def _render_clip(
         "-i", str(mp3),
         "-filter_complex",
         (
-            f"[0:v]scale=1280:720:force_original_aspect_ratio=decrease,"
-            f"pad=1280:720:(ow-iw)/2:(oh-ih)/2:color=black,"
+            f"[0:v]scale=1920:1080:force_original_aspect_ratio=decrease,"
+            f"pad=1920:1080:(ow-iw)/2:(oh-ih)/2:color=black,"
             f"fade=t=in:st=0:d={FADE_DUR},"
             f"fade=t=out:st={fade_start}:d={FADE_DUR}[v];"
             f"[1:a]apad=pad_dur={SILENCE_PAD}[a]"
@@ -144,7 +144,7 @@ async def _render_clip(
         "-map", "[a]",
         "-c:v", "libx264",
         "-preset", "fast",
-        "-crf", "23",
+        "-crf", "18",
         "-c:a", "aac",
         "-b:a", "128k",
         "-t", str(clip_dur),
@@ -174,7 +174,7 @@ async def _concat_clips(
         "-i", str(concat_list),
         "-c:v", "libx264",
         "-preset", "fast",
-        "-crf", "23",
+        "-crf", "18",
         "-c:a", "aac",
         "-b:a", "128k",
         "-movflags", "+faststart",

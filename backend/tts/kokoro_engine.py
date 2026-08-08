@@ -169,9 +169,10 @@ class KokoroEngine(TTSEngine):
                 silence = np.zeros(int(SAMPLE_RATE * 0.15), dtype=audio.dtype)
                 audio_parts.append(silence)
             except ValueError as e:
-                # Chunk still too long — split further by comma/semicolon
+                # Chunk still too long — split further by semicolon/dash only
+                # Do NOT split on comma — "phong, ban, nganh" loses context
                 logger.warning(f"[TTS/Kokoro] Chunk too long, splitting further: {e}")
-                sub_chunks = re.split(r"[,;،،]+", chunk)
+                sub_chunks = re.split(r"[;–—]+", chunk)
                 for sub in sub_chunks:
                     if not sub.strip():
                         continue
@@ -213,10 +214,11 @@ class KokoroEngine(TTSEngine):
                 f"FFmpeg WAV→MP3 failed: {result.stderr.decode(errors='replace')[-500:]}"
             )
 
-def _split_text(text: str, max_chars: int = 200) -> list[str]:
+def _split_text(text: str, max_chars: int = 300) -> list[str]:
     """
-    Split text into chunks small enough for Kokoro (<=510 phonemes ≈ <=200 chars).
-    Splits on sentence boundaries: newline > .!? > — dash separators.
+    Split text into chunks small enough for Kokoro (<=510 phonemes ≈ <=300 chars).
+    Splits on sentence boundaries: newline > .!? > semicolon/dash.
+    Never splits on comma to preserve context like "phong, ban, nganh".
     """
     import re
 

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 import React, { useState, useCallback, useEffect } from "react";
 import { toast } from "sonner";
 import { Zap, Github, AlertTriangle } from "lucide-react";
@@ -55,11 +55,16 @@ function ValidatingSkeleton() {
 
 // ─── Parse uploaded .txt into ScriptMap ──────────────────────────────────────
 function parseTxtToScriptMap(content: string): ScriptMap {
-  const pattern = /^S(\d+):\s*([\s\S]+?)(?=^S\d+:|\s*$)/gm;
+  const normalized = content.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  // Split on slide markers (^S<n>:), keeping each marker with its content
+  const parts = normalized.split(/(?=^S\d+:)/m);
   const map: ScriptMap = {};
-  let match;
-  while ((match = pattern.exec(content)) !== null) {
-    map[Number(match[1])] = match[2].trim();
+  for (const part of parts) {
+    const m = part.match(/^S(\d+):\s*([\s\S]*)/);
+    if (m) {
+      const text = m[2].trim();
+      if (text) map[Number(m[1])] = text;
+    }
   }
   return map;
 }

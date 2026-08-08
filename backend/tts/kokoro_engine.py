@@ -113,12 +113,12 @@ class KokoroEngine(TTSEngine):
             voice_id = "diem_trinh"
 
         voice_label = KOKORO_VOICE_MAP[voice_id]
-        logger.info(f"[TTS/Kokoro] Generating audio (voice: {voice_label})")
+        logger.info(f"[TTS/Kokoro] Generating audio (voice: {voice_label}, speed: {settings.speed}x)")
 
-        await self._generate_kokoro(text, voice_id, output_path)
+        await self._generate_kokoro(text, voice_id, output_path, settings.speed)
         return output_path
 
-    async def _generate_kokoro(self, text: str, voice_id: str, output_path: Path) -> None:
+    async def _generate_kokoro(self, text: str, voice_id: str, output_path: Path, speed: float = 1.25) -> None:
         """Run Kokoro inference in thread pool, then convert WAV→MP3 via FFmpeg."""
         instance = await self._get_instance(voice_id)
         output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -128,7 +128,7 @@ class KokoroEngine(TTSEngine):
         normalized = _normalize_text(text)
 
         loop = asyncio.get_event_loop()
-        await loop.run_in_executor(None, self._synthesize_blocking, instance, normalized, wav_path)
+        await loop.run_in_executor(None, self._synthesize_blocking, instance, normalized, wav_path, speed)
         await self._wav_to_mp3(wav_path, output_path)
 
         if wav_path.exists():
@@ -142,7 +142,7 @@ class KokoroEngine(TTSEngine):
             f"({output_path.stat().st_size // 1024} KB)"
         )
 
-    def _synthesize_blocking(self, instance: object, text: str, wav_path: Path) -> None:
+    def _synthesize_blocking(self, instance: object, text: str, wav_path: Path, speed: float = 1.25) -> None:
         """Blocking Kokoro synthesis — must run in executor.
 
         synthesize() returns (audio: np.ndarray, phonemes: str).
@@ -163,7 +163,7 @@ class KokoroEngine(TTSEngine):
             if not chunk.strip():
                 continue
             try:
-                audio, _ = instance.synthesize(chunk)  # type: ignore
+                audio, _ = instance.synthesize(chunk, speed=speed)  # type: ignore
                 audio_parts.append(audio)
                 # Short silence between chunks (0.15s)
                 silence = np.zeros(int(SAMPLE_RATE * 0.15), dtype=audio.dtype)
@@ -177,7 +177,7 @@ class KokoroEngine(TTSEngine):
                     if not sub.strip():
                         continue
                     try:
-                        audio, _ = instance.synthesize(sub.strip())  # type: ignore
+                        audio, _ = instance.synthesize(sub.strip(), speed=speed)  # type: ignore
                         audio_parts.append(audio)
                         silence = np.zeros(int(SAMPLE_RATE * 0.08), dtype=audio.dtype)
                         audio_parts.append(silence)

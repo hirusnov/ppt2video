@@ -27,11 +27,13 @@ export const KOKORO_VOICES: KokoroVoice[] = [
 export interface TTSSettings {
   engine: "kokoro";
   kokoroVoice: string;
+  speed: number; // 0.5 to 2.0, default 1.25
 }
 
 export const DEFAULT_SETTINGS: TTSSettings = {
   engine: "kokoro",
   kokoroVoice: "diem_trinh",
+  speed: 1.25,
 };
 
 // ─── Slide types ──────────────────────────────────────────────────────────────

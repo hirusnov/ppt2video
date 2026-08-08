@@ -9,6 +9,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Slider } from "@/components/ui/slider";
 import { cn } from "@/lib/utils";
 
 const backendUrl = (path: string) => {
@@ -38,7 +39,6 @@ export function VoiceSettings({
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const objectUrlRef = useRef<string | null>(null);
 
-  // Stop audio and clean up object URL
   const stopAudio = useCallback(() => {
     if (audioRef.current) {
       audioRef.current.pause();
@@ -53,28 +53,26 @@ export function VoiceSettings({
     setPreviewVoice("");
   }, []);
 
-  // Stop when component unmounts or voice changes
   useEffect(() => {
     return () => stopAudio();
   }, [stopAudio]);
 
   const handlePreview = useCallback(
     async (voiceId: string) => {
-      // If already playing this voice — stop
       if (previewState === "playing" && previewVoice === voiceId) {
         stopAudio();
         return;
       }
-
-      // Stop any current audio first
       stopAudio();
-
       setPreviewState("loading");
       setPreviewVoice(voiceId);
 
       try {
+        const speed = settings.speed ?? 1.25;
         const res = await fetch(
-          backendUrl(`/api/preview-voice?voice=${encodeURIComponent(voiceId)}`),
+          backendUrl(
+            `/api/preview-voice?voice=${encodeURIComponent(voiceId)}&speed=${speed}`,
+          ),
         );
         if (!res.ok) {
           const err = await res.json().catch(() => ({}));
@@ -87,10 +85,8 @@ export function VoiceSettings({
 
         const audio = new Audio(url);
         audioRef.current = audio;
-
         audio.addEventListener("ended", stopAudio);
         audio.addEventListener("error", stopAudio);
-
         await audio.play();
         setPreviewState("playing");
       } catch (e) {
@@ -98,18 +94,20 @@ export function VoiceSettings({
         stopAudio();
       }
     },
-    [previewState, previewVoice, stopAudio],
+    [previewState, previewVoice, stopAudio, settings.speed],
   );
 
+  const speed = settings.speed ?? 1.25;
+  const speedLabel = speed.toFixed(2).replace(/\.?0+$/, "") + "x";
+
   return (
-    <div className={compact ? "space-y-2" : "space-y-3"}>
+    <div className={compact ? "space-y-3" : "space-y-4"}>
+      {/* Voice selector */}
       <div className="space-y-1.5">
         <label className="text-xs font-medium text-zinc-400 uppercase tracking-wide">
           Giọng đọc (Kokoro-VN)
         </label>
-
         <div className="flex gap-2">
-          {/* Voice selector */}
           <Select
             value={settings.kokoroVoice}
             onValueChange={(v) => {
@@ -165,7 +163,6 @@ export function VoiceSettings({
           </button>
         </div>
 
-        {/* Status text */}
         {previewState !== "idle" && previewVoice === settings.kokoroVoice && (
           <p className="text-xs text-zinc-500">
             {previewState === "loading"
@@ -173,6 +170,25 @@ export function VoiceSettings({
               : "Đang phát — nhấn ■ để dừng"}
           </p>
         )}
+      </div>
+
+      {/* Speed slider */}
+      <div className="space-y-1.5">
+        <Slider
+          label="Tốc độ đọc"
+          valueDisplay={speedLabel}
+          min={0.5}
+          max={2.0}
+          step={0.05}
+          value={[speed]}
+          onValueChange={([v]) => onChange({ ...settings, speed: v })}
+          disabled={disabled}
+        />
+        <div className="flex justify-between text-[10px] text-zinc-600 px-0.5">
+          <span>0.5x</span>
+          <span className="text-zinc-500">Mặc định: 1.25x</span>
+          <span>2.0x</span>
+        </div>
       </div>
     </div>
   );

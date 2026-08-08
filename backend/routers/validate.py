@@ -139,13 +139,13 @@ async def validate_files(
     )
 
 
-PREVIEW_TEXT = "Xin chào, tôi là giọng đọc tiếng Việt của hệ thống PPT2VIDEO."
+PREVIEW_TEXT = "số 1, 02, 12, 102, 333, 5555, 167784"
 
 
 @router.get("/preview-voice")
-async def preview_voice(voice: str = "diem_trinh"):
+async def preview_voice(voice: str = "diem_trinh", speed: float = 1.25):
     """
-    Generate a short MP3 preview for the given Kokoro voice ID.
+    Generate a short MP3 preview for the given Kokoro voice ID and speed.
     Returns the MP3 file directly (streamed).
     """
     from tts.kokoro_engine import KokoroEngine, KOKORO_VOICE_MAP
@@ -154,8 +154,10 @@ async def preview_voice(voice: str = "diem_trinh"):
     if voice not in KOKORO_VOICE_MAP:
         raise HTTPException(status_code=400, detail=f"Unknown voice: {voice}")
 
+    speed = max(0.5, min(2.0, speed))  # clamp to safe range
+
     engine = KokoroEngine()
-    settings = TTSSettings(engine="kokoro", kokoro_voice=voice)
+    settings = TTSSettings(engine="kokoro", kokoro_voice=voice, speed=speed)
 
     # Write to a temp file — FileResponse will stream it then we clean up
     tmp = tempfile.NamedTemporaryFile(suffix=".mp3", delete=False)

@@ -144,12 +144,47 @@ class KokoroEngine(TTSEngine):
 
         synthesize() returns (audio: np.ndarray, phonemes: str).
         Sample rate is a module-level constant SAMPLE_RATE = 24000.
+
+        Kokoro has a hard limit of 510 phonemes per text chunk. Long texts are
+        split into sentences, synthesized individually, then concatenated.
         """
+        import re
+        import numpy as np
         import soundfile as sf  # type: ignore
         from kokoro_vietnamese import SAMPLE_RATE
 
-        audio, _phonemes = instance.synthesize(text)  # type: ignore
-        sf.write(str(wav_path), audio, SAMPLE_RATE)
+        chunks = _split_text(text)
+        audio_parts: list[np.ndarray] = []
+
+        for chunk in chunks:
+            if not chunk.strip():
+                continue
+            try:
+                audio, _ = instance.synthesize(chunk)  # type: ignore
+                audio_parts.append(audio)
+                # Short silence between chunks (0.15s)
+                silence = np.zeros(int(SAMPLE_RATE * 0.15), dtype=audio.dtype)
+                audio_parts.append(silence)
+            except ValueError as e:
+                # Chunk still too long — split further by comma/semicolon
+                logger.warning(f"[TTS/Kokoro] Chunk too long, splitting further: {e}")
+                sub_chunks = re.split(r"[,;،،]+", chunk)
+                for sub in sub_chunks:
+                    if not sub.strip():
+                        continue
+                    try:
+                        audio, _ = instance.synthesize(sub.strip())  # type: ignore
+                        audio_parts.append(audio)
+                        silence = np.zeros(int(SAMPLE_RATE * 0.08), dtype=audio.dtype)
+                        audio_parts.append(silence)
+                    except Exception as e2:
+                        logger.warning(f"[TTS/Kokoro] Skipping sub-chunk ({e2}): {sub[:40]}")
+
+        if not audio_parts:
+            raise RuntimeError("No audio produced by Kokoro")
+
+        final_audio = np.concatenate(audio_parts)
+        sf.write(str(wav_path), final_audio, SAMPLE_RATE)
 
     async def _wav_to_mp3(self, wav_path: Path, mp3_path: Path) -> None:
         """Convert WAV to MP3 using FFmpeg (blocking in thread pool)."""
@@ -174,3 +209,50 @@ class KokoroEngine(TTSEngine):
             raise RuntimeError(
                 f"FFmpeg WAV→MP3 failed: {result.stderr.decode(errors='replace')[-500:]}"
             )
+
+def _split_text(text: str, max_chars: int = 200) -> list[str]:
+    """
+    Split text into chunks small enough for Kokoro (<=510 phonemes ≈ <=200 chars).
+    Splits on sentence boundaries: newline > .!? > — dash separators.
+    """
+    import re
+
+    # First split on newlines and sentence-ending punctuation
+    raw = re.split(r"(?<=[.!?…])\s+|(?<=\n)", text)
+
+    chunks: list[str] = []
+    current = ""
+
+    for part in raw:
+        part = part.strip()
+        if not part:
+            continue
+        if len(current) + len(part) + 1 <= max_chars:
+            current = (current + " " + part).strip() if current else part
+        else:
+            if current:
+                chunks.append(current)
+            # If single part still too long, split on em-dash / bullet / semicolon
+            if len(part) > max_chars:
+                sub_parts = re.split(r"[;\-–—]+", part)
+                sub_buf = ""
+                for sp in sub_parts:
+                    sp = sp.strip()
+                    if not sp:
+                        continue
+                    if len(sub_buf) + len(sp) + 2 <= max_chars:
+                        sub_buf = (sub_buf + "; " + sp).strip("; ") if sub_buf else sp
+                    else:
+                        if sub_buf:
+                            chunks.append(sub_buf)
+                        sub_buf = sp
+                if sub_buf:
+                    chunks.append(sub_buf)
+                current = ""
+            else:
+                current = part
+
+    if current:
+        chunks.append(current)
+
+    return [c for c in chunks if c.strip()]

@@ -348,8 +348,8 @@ def _normalize_text(text: str) -> str:
     # Order matters: try longer patterns first
     # 1. dates (d/m/yyyy) — replace entire token including surrounding context
     def _replace_date(m):
-        d, mo, yr = int(m.group(1)), int(m.group(2)), int(m.group(3))
-        return f"{_n2v(d)} tháng {_n2v(mo)} năm {_n2v(yr)}"
+        d, mo, yr = int(m.group(1)), int(m.group(2)), m.group(3)
+        return f"{_n2v(d)} tháng {_n2v(mo)} năm {_year_digits(yr)}"
     # Only match bare date patterns (not preceded by letter/digit)
     text = re.sub(r"(?<![/\d\w])(\d{1,2})/(\d{1,2})/(\d{4})(?![/\d])", _replace_date, text)
     # 2. percentages

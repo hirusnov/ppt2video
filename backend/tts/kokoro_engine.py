@@ -261,6 +261,17 @@ def _split_text(text: str, max_chars: int = 200) -> list[str]:
     return [c for c in chunks if c.strip()]
 
 
+_DIGIT_VI = {"0": "không", "1": "một", "2": "hai", "3": "ba", "4": "bốn",
+             "5": "năm", "6": "sáu", "7": "bảy", "8": "tám", "9": "chín"}
+
+def _year_digits(year_str: str) -> str:
+    """Convert a 4-digit year to digit-by-digit Vietnamese reading.
+    2026 -> 'hai không hai sáu'
+    2002 -> 'hai không không hai'
+    """
+    return " ".join(_DIGIT_VI[d] for d in year_str)
+
+
 def _normalize_text(text: str) -> str:
     """
     Convert numbers and common patterns to Vietnamese spoken form
@@ -347,8 +358,8 @@ def _normalize_text(text: str) -> str:
     text = re.sub(r"\d+,\d{1,3}(?!\d)", _replace, text)
     # 4. thousands with dots (e.g. 148.285 — only if all groups are 3 digits)
     text = re.sub(r"\d{1,3}(?:\.\d{3})+", _replace, text)
-    # 5. 4-digit years standalone — spell as number only (prefix "năm" stays)
-    text = re.sub(r"(?<!\d)(20[0-3]\d)(?!\d)", lambda m: _n2v(int(m.group(1))), text)
+    # 5. 4-digit years standalone — read digit by digit (2026 -> hai không hai sáu)
+    text = re.sub(r"(?<!\d)((?:19|20)[0-9]{2})(?!\d)", lambda m: _year_digits(m.group(1)), text)
     # 6. plain integers >=2 digits (standalone, not part of doc codes like 22/HD-BCA)
     text = re.sub(r"(?<![/\w])\d{2,}(?![/\w])", _replace, text)
 

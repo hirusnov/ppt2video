@@ -72,7 +72,7 @@ export interface TTSSettings {
 export const DEFAULT_SETTINGS: TTSSettings = {
   engine: "kokoro",
   kokoroVoice: "diem_trinh",
-  speed: 1.25,
+  speed: 1.0,
   vieneuVoice: "Minh Đức",
   vieneuStyle: "tu_nhien",
 };

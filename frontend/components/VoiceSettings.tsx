@@ -88,7 +88,7 @@ export function VoiceSettings({
       } else {
         params.set("engine", "kokoro");
         params.set("voice", settings.kokoroVoice);
-        params.set("speed", String(settings.speed ?? 1.25));
+        params.set("speed", String(settings.speed ?? 1.0));
       }
 
       const res = await fetch(backendUrl(`/api/preview-voice?${params}`));
@@ -301,7 +301,7 @@ export function VoiceSettings({
         <Slider
           label="Tốc độ đọc"
           valueDisplay={
-            (settings.speed ?? 1.25).toFixed(2).replace(/\.?0+$/, "") + "x"
+            (settings.speed ?? 1.0).toFixed(2).replace(/\.?0+$/, "") + "x"
           }
           min={0.5}
           max={2.0}
@@ -312,7 +312,7 @@ export function VoiceSettings({
         />
         <div className="flex justify-between text-[10px] text-zinc-600 px-0.5">
           <span>0.5x</span>
-          <span className="text-zinc-500">Mặc định: 1.25x</span>
+          <span className="text-zinc-500">Mặc định: 1x</span>
           <span>2.0x</span>
         </div>
       </div>

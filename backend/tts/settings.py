@@ -11,7 +11,7 @@ class TTSSettings:
 
     # Kokoro params
     kokoro_voice: str = "diem_trinh"
-    speed: float = 1.25
+    speed: float = 1.0
 
     # VieNeu params
     vieneu_voice: str = "Minh Đức"
@@ -33,7 +33,7 @@ class TTSSettings:
         return cls(
             engine=d.get("engine", "kokoro"),
             kokoro_voice=d.get("kokoroVoice", "diem_trinh"),
-            speed=float(d.get("speed", 1.25)),
+            speed=float(d.get("speed", 1.0)),
             vieneu_voice=d.get("vieneuVoice", "Minh Đức"),
             vieneu_style=d.get("vieneuStyle", "tu_nhien"),
         )

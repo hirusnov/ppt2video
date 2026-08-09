@@ -118,7 +118,7 @@ class KokoroEngine(TTSEngine):
         await self._generate_kokoro(text, voice_id, output_path, settings.speed)
         return output_path
 
-    async def _generate_kokoro(self, text: str, voice_id: str, output_path: Path, speed: float = 1.25) -> None:
+    async def _generate_kokoro(self, text: str, voice_id: str, output_path: Path, speed: float = 1.0) -> None:
         """Run Kokoro inference in thread pool, then convert WAV→MP3 via FFmpeg."""
         instance = await self._get_instance(voice_id)
         output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -142,7 +142,7 @@ class KokoroEngine(TTSEngine):
             f"({output_path.stat().st_size // 1024} KB)"
         )
 
-    def _synthesize_blocking(self, instance: object, text: str, wav_path: Path, speed: float = 1.25) -> None:
+    def _synthesize_blocking(self, instance: object, text: str, wav_path: Path, speed: float = 1.0) -> None:
         """Blocking Kokoro synthesis — must run in executor.
 
         synthesize() returns (audio: np.ndarray, phonemes: str).

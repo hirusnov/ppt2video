@@ -139,7 +139,7 @@ async def validate_files(
     )
 
 
-PREVIEW_TEXT = "Kính thưa các đồng chí. Sau đây, Ban chỉ đạo phong trào toàn dân bảo vệ an ninh tổ quốc báo cáo kết quả công tác xây dựng phong trào toàn dân bảo vệ an ninh Tổ quốc 6 tháng đầu năm 2026; đồng thời báo cáo kết quả phối hợp xây dựng phong trào toàn dân bảo vệ an ninh Tổ quốc và biểu dương Ban Công tác Mặt trận khu dân cư điển hình tiên tiến giai đoạn 2016 đến 2026"
+PREVIEW_TEXT = "Kính thưa các đồng chí, sau đây ban chỉ đạo phong trào toàn dân bảo vệ an ninh tổ quốc báo cáo kết quả công tác xây dựng phong trào toàn dân bảo vệ an ninh Tổ quốc 6 tháng đầu năm 2026; đồng thời báo cáo kết quả phối hợp xây dựng phong trào toàn dân bảo vệ an ninh Tổ quốc và biểu dương Ban Công tác Mặt trận khu dân cư điển hình tiên tiến, giai đoạn 2016 đến 2026"
 
 
 @router.get("/preview-voice")

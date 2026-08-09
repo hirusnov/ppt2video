@@ -196,8 +196,7 @@ class VieNeuEngine(TTSEngine):
             temperature=0.4,    # default 0.8 — too random, causes unstable pronunciation
             top_k=10,           # default 25 — narrower beam = more stable
             top_p=0.85,         # default 0.95
-            repetition_penalty=1.5,  # higher to prevent repeating phrases
-            max_chars=150,           # smaller chunks reduce hallucination
+            repetition_penalty=1.3,  # slightly higher to avoid stuck phonemes
         )
 
         # Apply speed by resampling if speed != 1.0

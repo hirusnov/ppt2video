@@ -1,6 +1,6 @@
-"use client";
+﻿"use client";
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Play, Square, Loader2 } from "lucide-react";
+import { Play, Square, Loader2, Download } from "lucide-react";
 import {
   TTSSettings,
   TTSEngineType,
@@ -44,6 +44,10 @@ export function VoiceSettings({
   const [previewKey, setPreviewKey] = useState<string>("");
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const objectUrlRef = useRef<string | null>(null);
+  // Keep last successful preview blob for download
+  const downloadUrlRef = useRef<string | null>(null);
+  const downloadNameRef = useRef<string>("preview.mp3");
+  const [hasPreview, setHasPreview] = useState(false);
 
   const stopAudio = useCallback(() => {
     if (audioRef.current) {
@@ -96,6 +100,15 @@ export function VoiceSettings({
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       objectUrlRef.current = url;
+
+      // Save a separate URL for download
+      if (downloadUrlRef.current) URL.revokeObjectURL(downloadUrlRef.current);
+      downloadUrlRef.current = URL.createObjectURL(blob);
+      const voiceSlug = settings.engine === "vieneu"
+        ? settings.vieneuVoice.replace(/\s+/g, "_")
+        : settings.kokoroVoice;
+      downloadNameRef.current = `preview_${settings.engine}_${voiceSlug}.mp3`;
+      setHasPreview(true);
 
       const audio = new Audio(url);
       audioRef.current = audio;
@@ -229,6 +242,24 @@ export function VoiceSettings({
               <Play className="w-3.5 h-3.5 fill-current" />
             )}
           </button>
+
+          {/* Download button — visible after preview is generated */}
+          {hasPreview && (
+            <a
+              href={downloadUrlRef.current ?? "#"}
+              download={downloadNameRef.current}
+              title="Tải MP3 preview"
+              className={cn(
+                "shrink-0 w-9 h-9 rounded-lg border border-white/10 bg-zinc-800",
+                "flex items-center justify-center text-zinc-400",
+                "hover:text-emerald-400 hover:border-emerald-500/40 hover:bg-emerald-500/10",
+                "transition-all duration-200",
+                disabled && "opacity-40 pointer-events-none",
+              )}
+            >
+              <Download className="w-3.5 h-3.5" />
+            </a>
+          )}
         </div>
 
         {previewState !== "idle" && isThisPreviewActive && (

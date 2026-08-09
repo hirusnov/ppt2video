@@ -306,7 +306,7 @@ export function VoiceSettings({
           min={0.5}
           max={2.0}
           step={0.05}
-          value={[settings.speed ?? 1.25]}
+          value={[settings.speed ?? 1.0]}
           onValueChange={([v]) => onChange({ ...settings, speed: v })}
           disabled={disabled}
         />

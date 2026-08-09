@@ -143,37 +143,47 @@ PREVIEW_TEXT = "số 1, 02, 12, 102, 333, 5555, 167784"
 
 
 @router.get("/preview-voice")
-async def preview_voice(voice: str = "diem_trinh", speed: float = 1.25):
-    """
-    Generate a short MP3 preview for the given Kokoro voice ID and speed.
-    Returns the MP3 file directly (streamed).
-    """
-    from tts.kokoro_engine import KokoroEngine, KOKORO_VOICE_MAP
+async def preview_voice(
+    voice: str = "diem_trinh",
+    speed: float = 1.25,
+    engine: str = "kokoro",
+    style: str = "tu_nhien",
+):
+    """Generate a short MP3 preview for the given voice/engine."""
     from tts.settings import TTSSettings
 
-    if voice not in KOKORO_VOICE_MAP:
-        raise HTTPException(status_code=400, detail=f"Unknown voice: {voice}")
+    settings = TTSSettings(
+        engine=engine,  # type: ignore
+        kokoro_voice=voice if engine == "kokoro" else "diem_trinh",
+        speed=max(0.5, min(2.0, speed)),
+        vieneu_voice=voice if engine == "vieneu" else "Minh Đức",
+        vieneu_style=style,
+    )
 
-    speed = max(0.5, min(2.0, speed))  # clamp to safe range
+    if engine == "vieneu":
+        from tts.vieneu_engine import VieNeuEngine, VIENEU_VOICES
+        if voice not in VIENEU_VOICES:
+            raise HTTPException(status_code=400, detail=f"Unknown VieNeu voice: {voice}")
+        tts_engine = VieNeuEngine()
+    else:
+        from tts.kokoro_engine import KokoroEngine, KOKORO_VOICE_MAP
+        if voice not in KOKORO_VOICE_MAP:
+            raise HTTPException(status_code=400, detail=f"Unknown Kokoro voice: {voice}")
+        tts_engine = KokoroEngine()
 
-    engine = KokoroEngine()
-    settings = TTSSettings(engine="kokoro", kokoro_voice=voice, speed=speed)
-
-    # Write to a temp file — FileResponse will stream it then we clean up
     tmp = tempfile.NamedTemporaryFile(suffix=".mp3", delete=False)
     tmp.close()
     out_path = Path(tmp.name)
 
     try:
-        await engine.generate(PREVIEW_TEXT, settings, out_path)
+        await tts_engine.generate(PREVIEW_TEXT, settings, out_path)
     except Exception as e:
         out_path.unlink(missing_ok=True)
         raise HTTPException(status_code=500, detail=f"Preview generation failed: {e}")
 
-    voice_label = KOKORO_VOICE_MAP[voice]
     return FileResponse(
         path=str(out_path),
         media_type="audio/mpeg",
-        filename=f"preview_{voice}.mp3",
+        filename=f"preview_{engine}_{voice}.mp3",
         background=BackgroundTask(out_path.unlink, missing_ok=True),
     )

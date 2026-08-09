@@ -19,10 +19,11 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 kokoro_ready = False
+vieneu_ready = False
 
 
 async def preload_kokoro():
-    """Pre-warm Kokoro model at startup to reduce first-request latency."""
+    """Pre-warm Kokoro model at startup."""
     global kokoro_ready
     try:
         logger.info("[STARTUP] Pre-loading Kokoro-Vietnamese model...")
@@ -36,16 +37,37 @@ async def preload_kokoro():
         kokoro_ready = False
 
 
+async def preload_vieneu():
+    """Pre-warm VieNeu-TTS v3 Turbo model at startup."""
+    global vieneu_ready
+    try:
+        logger.info("[STARTUP] Pre-loading VieNeu-TTS v3 Turbo model...")
+        from tts.vieneu_engine import VieNeuEngine
+        engine = VieNeuEngine()
+        await engine.preload()
+        vieneu_ready = True
+        logger.info("[STARTUP] VieNeu model loaded successfully.")
+    except Exception as e:
+        logger.warning(f"[STARTUP] VieNeu pre-load failed: {e}")
+        vieneu_ready = False
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("[STARTUP] PPT2VIDEO backend starting...")
     from services.job_store import JOBS_BASE
     JOBS_BASE.mkdir(parents=True, exist_ok=True)
 
-    await preload_kokoro()
+    # Load both engines concurrently
+    await asyncio.gather(
+        preload_kokoro(),
+        preload_vieneu(),
+        return_exceptions=True,
+    )
 
-    logger.info(f"[STARTUP] Kokoro ready: {kokoro_ready}")
+    logger.info(f"[STARTUP] Kokoro ready: {kokoro_ready} | VieNeu ready: {vieneu_ready}")
     app.state.kokoro_ready = kokoro_ready
+    app.state.vieneu_ready = vieneu_ready
 
     yield
 
@@ -54,12 +76,11 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="PPT2VIDEO API",
-    description="Convert PPTX + Vietnamese script to MP4 with Kokoro TTS",
+    description="Convert PPTX + Vietnamese script to MP4 with AI TTS (Kokoro / VieNeu)",
     version="1.0.0",
     lifespan=lifespan
 )
 
-# CORS — allow local dev only
 ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://localhost:3001",
@@ -85,7 +106,9 @@ app.include_router(extract.router, prefix="/api")
 async def health_check():
     return {
         "status": "ok",
-        "engine": "kokoro",
-        "kokoro_ready": getattr(app.state, "kokoro_ready", False),
+        "engines": {
+            "kokoro": getattr(app.state, "kokoro_ready", False),
+            "vieneu": getattr(app.state, "vieneu_ready", False),
+        },
         "version": "1.0.0"
     }

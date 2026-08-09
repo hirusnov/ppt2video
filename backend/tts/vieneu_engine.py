@@ -83,20 +83,24 @@ class VieNeuEngine(TTSEngine):
         """Blocking model load — runs in thread pool."""
         from vieneu import Vieneu  # type: ignore
 
-        # Detect CUDA — use PyTorch for batched GPU inference
-        # Fall back to ONNX CPU if no GPU available
+        # Check CUDA availability first
+        cuda_available = False
         try:
             import torch
-            if torch.cuda.is_available():
+            cuda_available = torch.cuda.is_available()
+            if cuda_available:
                 name = torch.cuda.get_device_name(0)
                 vram = torch.cuda.get_device_properties(0).total_memory // 1024 // 1024
                 logger.info(f"[TTS/VieNeu] GPU: {name} ({vram} MB) — using PyTorch backend")
-                tts = Vieneu()  # auto-detects GPU → PyTorch
             else:
-                logger.info("[TTS/VieNeu] No GPU — using ONNX CPU backend (int8)")
-                tts = Vieneu(backend="onnx")
+                logger.info("[TTS/VieNeu] No GPU detected — using ONNX CPU backend (int8)")
         except ImportError:
-            logger.info("[TTS/VieNeu] torch not available — using ONNX CPU backend")
+            logger.warning("[TTS/VieNeu] torch not installed — forcing ONNX CPU backend")
+
+        # Load model — do NOT catch errors here, let them propagate
+        if cuda_available:
+            tts = Vieneu()  # auto-detects GPU → PyTorch
+        else:
             tts = Vieneu(backend="onnx")
 
         # Warm up

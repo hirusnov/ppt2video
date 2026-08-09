@@ -178,9 +178,26 @@ class VieNeuEngine(TTSEngine):
         import numpy as np
         import soundfile as sf  # type: ignore
 
+        # Set seed for reproducibility — reduces randomness between runs
+        try:
+            import torch
+            torch.manual_seed(42)
+            if torch.cuda.is_available():
+                torch.cuda.manual_seed_all(42)
+        except Exception:
+            pass
+
         # VieNeu handles long text / batching internally
-        # speed param: VieNeu doesn't have speed, but we can resample after
-        audio = tts.infer(text=text, voice=voice, style=style)  # type: ignore
+        # Lower temperature = more stable/consistent pronunciation
+        audio = tts.infer(  # type: ignore
+            text=text,
+            voice=voice,
+            style=style,
+            temperature=0.4,    # default 0.8 — too random, causes unstable pronunciation
+            top_k=10,           # default 25 — narrower beam = more stable
+            top_p=0.85,         # default 0.95
+            repetition_penalty=1.3,  # slightly higher to avoid stuck phonemes
+        )
 
         # Apply speed by resampling if speed != 1.0
         if abs(speed - 1.0) > 0.01:
